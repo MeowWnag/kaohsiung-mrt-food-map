@@ -1,0 +1,156 @@
+/* src/pages/HomePage.css */
+
+.homepage-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 佔滿整個視窗高度 */
+  overflow: hidden; /* 防止內容超出滾動 */
+}
+
+.homepage-header {
+  background-color: #f0f0f0;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ccc;
+}
+
+.homepage-header h1 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.logout-button {
+  padding: 8px 15px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background-color: #0056b3;
+}
+
+.main-content {
+  display: flex;
+  flex-grow: 1; /* 讓 main-content 填滿剩餘空間 */
+  overflow: hidden; /* 內容超出時隱藏或滾動，取決於子元素 */
+}
+
+.sidebar {
+  width: 250px; /* 側邊欄寬度 */
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-right: 1px solid #ddd;
+  overflow-y: auto; /* 如果內容過多，允許滾動 */
+}
+
+.sidebar h2 {
+  margin-top: 0;
+  font-size: 1.1em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.sidebar ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar li {
+  padding: 8px 5px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.sidebar li:hover {
+  background-color: #e9ecef;
+}
+
+.map-area-container {
+  flex-grow: 1;
+  display: block; /* 保持 block 以便於居中 */
+  justify-content: center; /* 水平居中 */
+  align-items: flex-start; /* 垂直從頂部開始，以便滾動 */
+  background-color: #e0e0e0;
+  overflow: auto; /* 或者 overflow: scroll; 允許滾動 */
+  position: relative;
+}
+
+.krtc-map-container {
+  position: relative;
+  width: 1100px ;
+  height: 1516px ;
+}
+
+.krtc-map-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.station-marker {
+  position: absolute;
+  width: 28px; /* 或者你想要的其他大小 */
+  height: 28px;
+  border-radius: 50%;
+  /* 邊框寬度和樣式，顏色會被 JS 的 style.borderColor 覆蓋 */
+  border: 3px solid; /* 例如 3px 寬的邊框 */
+  /* 背景色也會被 JS 的 style.backgroundColor 覆蓋，但可以設個預設 */
+  background-color: white;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.station-marker:hover,
+.station-marker.hovered {
+  transform: translate(-50%, -50%) scale(1.25);
+  z-index: 10;
+  box-shadow: 0 0 8px rgba(0,0,0,0.5);
+}
+
+/* 如果想在標記內顯示文字，可以添加樣式 */
+/*.station-marker .station-id-tooltip {
+  visibility: hidden;
+  width: 120px;
+  background-color: black;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}*/
+/*.station-marker:hover .station-id-tooltip {
+  visibility: visible;
+  opacity: 1;
+}*/
+.station-id-tooltip {
+  font-size: 10px;
+  font-weight: 900;
+  color: #333; /* 深灰色文字 */
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%; /* 確保它不超過按鈕寬度 */
+}
