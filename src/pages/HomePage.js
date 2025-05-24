@@ -5,7 +5,7 @@ import { auth, db } from '../firebase';
 import {
   collection, addDoc, serverTimestamp, query, where, getDocs, limit,
   onSnapshot,
-  // doc, deleteDoc // 稍後刪除功能會用到
+  doc, deleteDoc // 稍後刪除功能會用到
 } from "firebase/firestore";
 import { stationData, lineColors } from '../data/stations'; // 確保路徑正確
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
@@ -31,6 +31,7 @@ const HomePage = ({ user }) => {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [myFavoriteStores, setMyFavoriteStores] = useState([]);
   const [activeInfoWindow, setActiveInfoWindow] = useState(null);
+  const [isRemovingFromList, setIsRemovingFromList] = useState(false); // << 新增：處理移除時的狀態
 
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
   const mapRef = useRef(null);
@@ -256,7 +257,42 @@ const HomePage = ({ user }) => {
       setIsAddingToList(false);
     }
   };
+    // << 新增：從最愛清單中移除店家的函式 >>
+  const handleRemoveFromMyList = async (storeToRemove) => {
+    if (!user || !storeToRemove || !storeToRemove.id || !selectedStation || !selectedStation.id) {
+      setFeedbackMessage("錯誤：無法移除店家，資訊不完整。");
+      return;
+    }
+    if (isRemovingFromList) return; // 防止重複點擊
 
+    // 確認 storeToRemove.id 是 Firestore 文件 ID
+    // storeToRemove.googlePlaceId 是店家的 Google Place ID
+    // selectedStation.id 是當前捷運站的 ID
+
+    setIsRemovingFromList(true);
+    setFeedbackMessage(`正在從 ${selectedStation.name} 最愛中移除 ${storeToRemove.name}...`);
+
+    try {
+      const storeDocRef = doc(db, `users/${user.uid}/favoriteStoresByStation/${selectedStation.id}/stores`, storeToRemove.id);
+      await deleteDoc(storeDocRef);
+
+      setFeedbackMessage(`${storeToRemove.name} 已成功從 ${selectedStation.name} 的最愛清單中移除！`);
+      // 清單會通過 onSnapshot 自動更新
+      // 如果 InfoWindow 或側邊欄顯示的是這個剛被移除的店家，可以考慮關閉它們或清除 clickedPlace
+      if (clickedPlace && clickedPlace.id === storeToRemove.id) {
+        // setShowPlaceInfo(false); // 可選：關閉側邊欄詳細資訊
+        // setActiveInfoWindow(null); // 可選：關閉 InfoWindow
+        // setClickedPlace(null); // 可選：清除選中的店家
+        // 這裡的行為取決於你希望的使用者體驗
+      }
+
+    } catch (error) {
+      console.error("從個人清單移除失敗:", error);
+      setFeedbackMessage(`移除失敗: ${error.message}`);
+    } finally {
+      setIsRemovingFromList(false);
+    }
+  };
   const mapCenter = selectedStation?.realCoords || { lat: 22.639065, lng: 120.302104 };
   const mapOptions = {
     clickableIcons: true,
@@ -298,8 +334,18 @@ const HomePage = ({ user }) => {
               {myFavoriteStores.length > 0 ? (
                 <ul className="favorite-stores-list">
                   {myFavoriteStores.map(store => (
-                    <li key={store.id} onClick={() => handleSidebarFavoriteStoreClick(store)}>
-                      {store.name}
+                    <li key={store.id}>
+                      <span onClick={() => handleSidebarFavoriteStoreClick(store)} className="store-name">
+                        {store.name}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveFromMyList(store)}
+                        disabled={isRemovingFromList}
+                        className="remove-button-small"
+                        title={`從 ${selectedStation.name} 移除 ${store.name}`}
+                      >
+                        ✕
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -328,7 +374,6 @@ const HomePage = ({ user }) => {
                       ? (clickedPlace.openingHours.isOpen() ? "營業中" : "休息中")
                       : (clickedPlace.openingHours.open_now !== undefined ? (clickedPlace.openingHours.open_now ? "營業中" : "休息中") : "未知")
                   }</p>
-                  {/* 如果需要顯示詳細營業時間，可以遍歷 clickedPlace.openingHours.weekday_text */}
                   {clickedPlace.openingHours.weekday_text && (
                     <ul style={{fontSize: '0.8em', paddingLeft: '15px', marginTop: '5px'}}>
                       {clickedPlace.openingHours.weekday_text.map((text, index) => (
@@ -339,8 +384,21 @@ const HomePage = ({ user }) => {
                 </div>
               )}
               {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
-                 <button style={{marginTop: '10px', backgroundColor: '#6c757d', color: 'white', padding: '8px 12px', border: 'none', borderRadius: '4px'}} disabled>
-                   已在 {selectedStation.name} 清單中
+                 <button
+                   onClick={() => {
+                     const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId);
+                     if (storeInList) {
+                       handleRemoveFromMyList(storeInList);
+                     } else {
+                       // setFeedbackMessage("錯誤：在清單中找不到此店家以進行移除。"); // 確保 setFeedbackMessage 已定義
+                       console.error("錯誤：在清單中找不到此店家以進行移除。 ClickedPlace:", clickedPlace, "MyFavoriteStores:", myFavoriteStores);
+                     }
+                   }}
+                   disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)}
+                   style={{ marginTop: '10px' }}
+                   className="remove-from-list-button"
+                 >
+                   {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : `從 ${selectedStation.name} 最愛移除`}
                  </button>
               ) : (
                 <button
@@ -363,7 +421,7 @@ const HomePage = ({ user }) => {
           {!mapViewActive ? (
             <div className="krtc-map-container">
               <img
-                src="img/krtc-map.png"
+                src="img/krtc-map.png" // 確保這個路徑是正確的，通常在 public 資料夾下
                 alt="高雄捷運路線圖"
                 className="krtc-map-image"
               />
@@ -397,12 +455,12 @@ const HomePage = ({ user }) => {
             >
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
-                center={mapCenter}
+                center={mapCenter} // 確保 mapCenter 已定義
                 zoom={defaultZoom}
-                onLoad={onLoad}
-                onUnmount={onUnmount}
+                onLoad={onLoad} // 確保 onLoad 已定義
+                onUnmount={onUnmount} // 確保 onUnmount 已定義
                 onClick={handleMapPoiClick}
-                options={mapOptions}
+                options={mapOptions} // 確保 mapOptions 已定義
               >
                 {selectedStation && (
                   <Marker position={selectedStation.realCoords} title={selectedStation.name} />
@@ -432,28 +490,40 @@ const HomePage = ({ user }) => {
                       {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
 
                       {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
-                        <p style={{color: 'green', fontSize: '0.9em', margin: '5px 0 0 0'}}>✓ 已在 {selectedStation.name} 最愛</p>
+                        <button
+                          onClick={() => {
+                            const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId);
+                            if (storeInList) {
+                              handleRemoveFromMyList(storeInList);
+                            }
+                          }}
+                          disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)}
+                          className="remove-button-small infowindow-button"
+                          style={{marginTop: '5px'}}
+                        >
+                          {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : "從最愛移除"}
+                        </button>
                       ) : (
                         <button
                           onClick={handleAddToMyList}
                           disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION}
                           className="add-to-list-button"
-                          style={{fontSize: '0.9em', padding: '3px 6px'}}
+                          style={{fontSize: '0.9em', padding: '3px 6px', marginTop: '5px'}}
                         >
                           {isAddingToList ? "處理中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? "此站已滿" : `加入 ${selectedStation.name} 最愛`)}
                         </button>
                       )}
-
-                      {clickedPlace.googlePlaceId && ( // 確保有 googlePlaceId
+                      <br/>
+                       {clickedPlace.googlePlaceId && (
                         <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`}
-                        target="_blank" // 在新分頁打開
-                        rel="noopener noreferrer" // 安全性考量
-                        style={{ display: 'block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
                         >
-                        在 Google 地圖上查看
+                          在 Google 地圖上查看
                         </a>
-                    )}
+                      )}
                     </div>
                   </InfoWindow>
                 )}
