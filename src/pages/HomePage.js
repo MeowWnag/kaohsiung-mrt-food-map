@@ -1,11 +1,15 @@
 // src/pages/HomePage.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { signOut } from "firebase/auth";
-import { auth, db } from '../firebase'; // 引入 db
-import { collection, addDoc, serverTimestamp, query, where, getDocs, limit } from "firebase/firestore"; // 引入 Firestore 相關函式
-import { stationData, lineColors } from '../data/stations';
+import { auth, db } from '../firebase';
+import {
+  collection, addDoc, serverTimestamp, query, where, getDocs, limit,
+  onSnapshot,
+  // doc, deleteDoc // 稍後刪除功能會用到
+} from "firebase/firestore";
+import { stationData, lineColors } from '../data/stations'; // 確保路徑正確
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
-import './HomePage.css';
+import './HomePage.css'; // 確保引入 CSS
 
 const mapContainerStyle = {
   width: '100%',
@@ -13,25 +17,27 @@ const mapContainerStyle = {
 };
 
 const defaultZoom = 16;
-const libraries = ["places"]; // 關鍵：告訴 LoadScript 我們要使用 Places API
-const MAX_FAVORITE_STORES = 15; // 清單上限
+const libraries = ["places"];
+const MAX_FAVORITE_STORES_PER_STATION = 15;
 
 const HomePage = ({ user }) => {
   const [hoveredStation, setHoveredStation] = useState(null);
   const [selectedStation, setSelectedStation] = useState(null);
   const [mapViewActive, setMapViewActive] = useState(false);
-  const [clickedPlace, setClickedPlace] = useState(null); // 儲存被點擊的 POI 的 Place Details
-  const [showPlaceInfo, setShowPlaceInfo] = useState(false); // 控制 InfoWindow 或詳細資訊面板的顯示
-  const [mapInstance, setMapInstance] = useState(null); // 儲存 map instance
-  const [isAddingToList, setIsAddingToList] = useState(false); // 防止重複點擊的狀態
-  const [feedbackMessage, setFeedbackMessage] = useState(''); // 用於顯示操作回饋
+  const [clickedPlace, setClickedPlace] = useState(null);
+  const [showPlaceInfo, setShowPlaceInfo] = useState(false);
+  const [mapInstance, setMapInstance] = useState(null);
+  const [isAddingToList, setIsAddingToList] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [myFavoriteStores, setMyFavoriteStores] = useState([]);
+  const [activeInfoWindow, setActiveInfoWindow] = useState(null);
 
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
-  const mapRef = useRef(null); // 用來獲取 map instance
+  const mapRef = useRef(null);
 
   const onLoad = useCallback(function callback(map) {
-    setMapInstance(map); // 儲存 map instance
-    mapRef.current = map; // 也存到 ref
+    setMapInstance(map);
+    mapRef.current = map;
     console.log("Google Map instance loaded.");
   }, []);
 
@@ -46,22 +52,44 @@ const HomePage = ({ user }) => {
     }
   }, [googleMapsApiKey]);
 
-  // 清除回饋訊息的 timeout
   useEffect(() => {
     let timer;
     if (feedbackMessage) {
       timer = setTimeout(() => {
         setFeedbackMessage('');
-      }, 3000); // 3 秒後清除訊息
+      }, 3000);
     }
     return () => clearTimeout(timer);
   }, [feedbackMessage]);
 
+  useEffect(() => {
+    if (user && selectedStation && selectedStation.id) {
+      const stationFavoritesPath = `users/${user.uid}/favoriteStoresByStation/${selectedStation.id}/stores`;
+      const stationFavoritesRef = collection(db, stationFavoritesPath);
+      const q = query(stationFavoritesRef); // orderBy("addedAt", "desc")
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const stores = [];
+        querySnapshot.forEach((doc) => {
+          stores.push({ id: doc.id, ...doc.data() });
+        });
+        setMyFavoriteStores(stores);
+        console.log(`Fetched ${stores.length} favorite stores for station ${selectedStation.name}.`);
+      }, (error) => {
+        console.error(`Error fetching favorite stores for station ${selectedStation.id}: `, error);
+        setFeedbackMessage(`讀取 ${selectedStation.name} 最愛清單失敗`);
+        setMyFavoriteStores([]);
+      });
+
+      return () => unsubscribe();
+    } else {
+      setMyFavoriteStores([]);
+    }
+  }, [user, selectedStation]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // App.js 會處理導向
     } catch (error) {
       console.error("登出失敗:", error);
     }
@@ -71,11 +99,12 @@ const HomePage = ({ user }) => {
     if (station.realCoords) {
       setSelectedStation(station);
       setMapViewActive(true);
-      setClickedPlace(null); // 切換站點時清除之前點擊的店家資訊
+      setClickedPlace(null);
       setShowPlaceInfo(false);
-      setFeedbackMessage(''); // 切換站點時清除舊訊息
+      setActiveInfoWindow(null);
+      setFeedbackMessage('');
     } else {
-      console.warn(`站點 ${station.name} 缺少 realCoords (經緯度) 資料，無法顯示地圖。`);
+      console.warn(`站點 ${station.name} 缺少 realCoords 資料。`);
     }
   };
 
@@ -84,42 +113,28 @@ const HomePage = ({ user }) => {
     setSelectedStation(null);
     setClickedPlace(null);
     setShowPlaceInfo(false);
+    setActiveInfoWindow(null);
     setFeedbackMessage('');
   };
 
-  // 當 Google Map 上的 POI (Point of Interest) 被點擊時觸發
   const handleMapPoiClick = (event) => {
-    // event.stop(); // 可選，如果 Google Maps 在點擊 POI 時有預設行為 (例如打開它自己的 InfoWindow)
     const placeId = event.placeId;
-    console.log("POI Clicked, Place ID:", placeId);
-    
-
-    if (!placeId || !mapInstance) {
-      console.warn("Place ID or Map instance is not available.");
+    if (!placeId || !mapInstance || !selectedStation) {
+      console.warn("Place ID, Map instance, or Selected Station is not available for POI click.");
       return;
     }
 
     const placesService = new window.google.maps.places.PlacesService(mapInstance);
     placesService.getDetails({
       placeId: placeId,
-      // 指定你想獲取的欄位，這樣可以控制費用並只獲取需要的資料
       fields: [
-        'name',
-        'formatted_address',
-        'geometry.location', // 包含 lat, lng
-        'place_id',
-        'rating',
-        'user_ratings_total',
-        'photos', // 獲取照片
-        'opening_hours', // 營業時間
-        'types', // 店家類型
-        'website',
-        'formatted_phone_number'
+        'name', 'formatted_address', 'geometry.location', 'place_id',
+        'rating', 'user_ratings_total', 'photos', 'opening_hours',
+        'types', 'website', 'formatted_phone_number'
       ]
     }, (place, status) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
-        console.log("Place Details:", place);
-        setClickedPlace({
+        const newClickedPlace = {
           name: place.name,
           address: place.formatted_address,
           lat: place.geometry.location.lat(),
@@ -127,91 +142,113 @@ const HomePage = ({ user }) => {
           googlePlaceId: place.place_id,
           rating: place.rating,
           userRatingsTotal: place.user_ratings_total,
-          photos: place.photos, // 是一個陣列
-          openingHours: place.opening_hours,
+          photos: place.photos ? place.photos.map(p => ({ // Store getUrl and other relevant photo info
+            getUrl: (options) => p.getUrl(options), // Keep getUrl as a function
+            height: p.height,
+            width: p.width,
+            html_attributions: p.html_attributions,
+            photo_reference: p.photo_reference
+          })) : [],
+          openingHours: place.opening_hours, // This object itself has methods like isOpen()
           types: place.types,
           website: place.website,
           phoneNumber: place.formatted_phone_number
-        });
+        };
+        setClickedPlace(newClickedPlace);
         setShowPlaceInfo(true);
-        setFeedbackMessage(''); // 清除之前的訊息
+        setActiveInfoWindow(newClickedPlace.googlePlaceId);
+        setFeedbackMessage('');
       } else {
         console.error("Failed to get place details:", status, place);
         setClickedPlace(null);
         setShowPlaceInfo(false);
+        setActiveInfoWindow(null);
+        setFeedbackMessage('無法獲取店家詳細資訊');
       }
     });
   };
 
+  const handleFavoriteStoreMarkerClick = (store) => {
+    setClickedPlace(store);
+    setShowPlaceInfo(true);
+    setActiveInfoWindow(store.googlePlaceId);
+    if (mapRef.current && store.lat && store.lng) {
+      mapRef.current.panTo({ lat: store.lat, lng: store.lng });
+    }
+  };
+
+  const handleSidebarFavoriteStoreClick = (store) => {
+    setClickedPlace(store);
+    setShowPlaceInfo(true);
+    if (mapViewActive) {
+      setActiveInfoWindow(store.googlePlaceId);
+      if (mapRef.current && store.lat && store.lng) {
+        mapRef.current.panTo({ lat: store.lat, lng: store.lng });
+      }
+    }
+  };
+
   const handleClosePlaceInfo = () => {
-    setShowPlaceInfo(false);
-    //setClickedPlace(null);
+    // setShowPlaceInfo(false); // 可選：是否同時關閉側邊欄資訊
+    setActiveInfoWindow(null); // 主要關閉 InfoWindow
   };
 
   const handleAddToMyList = async () => {
-    if (!user || !clickedPlace || !selectedStation) {
-      setFeedbackMessage("錯誤：無法加入清單，請確認已登入並選擇店家及捷運站。");
+    if (!user || !clickedPlace || !selectedStation || !selectedStation.id) {
+      setFeedbackMessage("錯誤：請先選擇一個捷運站並點選店家。");
       return;
     }
-    if (isAddingToList) return; // 防止重複提交
+    if (isAddingToList) return;
 
     setIsAddingToList(true);
     setFeedbackMessage("正在加入清單...");
 
     try {
-      const userListRef = collection(db, `users/${user.uid}/myFavoriteStores`);
+      const stationStoresPath = `users/${user.uid}/favoriteStoresByStation/${selectedStation.id}/stores`;
+      const stationStoresRef = collection(db, stationStoresPath);
 
-      // 1. 檢查清單是否已滿
-      const currentListQuery = query(userListRef);
-      const currentListSnapshot = await getDocs(currentListQuery);
-      if (currentListSnapshot.docs.length >= MAX_FAVORITE_STORES) {
-        setFeedbackMessage(`您的清單已滿 (最多 ${MAX_FAVORITE_STORES} 家)，無法新增。`);
+      if (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION) {
+        setFeedbackMessage(`此捷運站 (${selectedStation.name}) 的最愛清單已滿 (最多 ${MAX_FAVORITE_STORES_PER_STATION} 家)。`);
         setIsAddingToList(false);
         return;
       }
 
-      // 2. 檢查店家是否已存在於清單中 (使用 googlePlaceId)
-      const q = query(userListRef, where("googlePlaceId", "==", clickedPlace.googlePlaceId), limit(1));
+      const q = query(stationStoresRef, where("googlePlaceId", "==", clickedPlace.googlePlaceId), limit(1));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        setFeedbackMessage("此店家已在您的清單中。");
+        setFeedbackMessage(`此店家已在 ${selectedStation.name} 的最愛清單中。`);
+        setActiveInfoWindow(clickedPlace.googlePlaceId);
         setIsAddingToList(false);
         return;
       }
+      
+      let mainPhotoUrl = null;
+      if (clickedPlace.photos && clickedPlace.photos.length > 0 && typeof clickedPlace.photos[0].getUrl === 'function') {
+          mainPhotoUrl = clickedPlace.photos[0].getUrl({ maxWidth: 400, maxHeight:300 }); //指定大小
+      }
 
-      // 3. 準備要儲存的店家資料
       const storeData = {
         name: clickedPlace.name || 'N/A',
         address: clickedPlace.address || 'N/A',
         googlePlaceId: clickedPlace.googlePlaceId,
         lat: clickedPlace.lat,
         lng: clickedPlace.lng,
-        stationId: selectedStation.id, // 標記是從哪個站點發現的
+        // stationId: selectedStation.id, // 路徑中已有，可省略
         addedAt: serverTimestamp(),
-        // 可選欄位，確保它們存在才加入
-        ...(clickedPlace.rating && { rating: clickedPlace.rating }),
-        ...(clickedPlace.userRatingsTotal && { userRatingsTotal: clickedPlace.userRatingsTotal }),
+        ...(clickedPlace.rating !== undefined && { rating: clickedPlace.rating }),
+        ...(clickedPlace.userRatingsTotal !== undefined && { userRatingsTotal: clickedPlace.userRatingsTotal }),
         ...(clickedPlace.types && { types: clickedPlace.types }),
         ...(clickedPlace.website && { website: clickedPlace.website }),
         ...(clickedPlace.phoneNumber && { phoneNumber: clickedPlace.phoneNumber }),
-        // 處理照片：儲存第一張照片的 URL (如果存在)
-        ...(clickedPlace.photos && clickedPlace.photos.length > 0 && {
-          // 注意：getURL() 可能需要額外參數或處理，此處為簡化
-          // 實際上，Places API photos 是一個物件，包含 getUrl 方法
-          // 你可能需要呼叫 photo.getUrl({maxWidth: 400, maxHeight: 400})
-          // 為了簡單起見，我們先假設 photos[0] 有一個可直接用的 URL，或者你需要進一步處理
-          // photoReference: clickedPlace.photos[0].photo_reference // 儲存 reference 可能更好
-          // 或直接使用 getUrl 獲取一個 URL，但這會產生一個 Google 的 URL
-          mainPhotoUrl: clickedPlace.photos[0].getUrl({maxWidth: 400}) // 獲取一個中等大小的圖片 URL
-        }),
+        ...(mainPhotoUrl && { mainPhotoUrl: mainPhotoUrl }),
+        // 如果需要儲存營業時間的文字描述 (openingHours.weekday_text)
+        ...(clickedPlace.openingHours && clickedPlace.openingHours.weekday_text && { openingHoursText: clickedPlace.openingHours.weekday_text }),
       };
 
-      await addDoc(userListRef, storeData);
-      setFeedbackMessage("店家已成功加入您的最愛清單！");
-      // setShowPlaceInfo(false); // 可選：加入成功後關閉資訊視窗
-      // setClickedPlace(null); // 可選：清除已選店家
-
+      await addDoc(stationStoresRef, storeData);
+      setFeedbackMessage(`店家已成功加入 ${selectedStation.name} 的最愛清單！`);
+      setActiveInfoWindow(clickedPlace.googlePlaceId);
     } catch (error) {
       console.error("加入個人清單失敗:", error);
       setFeedbackMessage(`加入失敗: ${error.message}`);
@@ -221,143 +258,215 @@ const HomePage = ({ user }) => {
   };
 
   const mapCenter = selectedStation?.realCoords || { lat: 22.639065, lng: 120.302104 };
-
-  // Google Map options
   const mapOptions = {
-    clickableIcons: true, // 非常重要：設置為 true 才能讓 POI 可點擊並觸發 onClick 事件
-    disableDefaultUI: false, // 可以保留預設 UI，或者設為 true 再自訂
-    // 你可以進一步客製化地圖樣式等
+    clickableIcons: true,
+    disableDefaultUI: false,
+    // zoomControl: true, // 確保縮放控制項是啟用的
+    // streetViewControl: false, // 如果不需要街景小人
   };
 
   return (
-        <div className="homepage-container">
-  <header className="homepage-header">
-    {mapViewActive && (
-      <button onClick={handleBackToRouteMap} className="back-button">
-        返回路線圖
-      </button>
-    )}
-    <h1>歡迎, {user ? user.displayName || user.email : '使用者'}!</h1>
-    <div>
-      {feedbackMessage && <span className="feedback-message">{feedbackMessage}</span>}
-      <button onClick={handleLogout} className="logout-button">登出</button>
-    </div>
-  </header>
+    <div className="homepage-container">
+      <header className="homepage-header">
+        {mapViewActive && (
+          <button onClick={handleBackToRouteMap} className="back-button">
+            返回路線圖
+          </button>
+        )}
+        <h1>歡迎, {user ? user.displayName || user.email : '使用者'}!</h1>
+        <div>
+          {feedbackMessage && <span className="feedback-message">{feedbackMessage}</span>}
+          <button onClick={handleLogout} className="logout-button">登出</button>
+        </div>
+      </header>
 
-  <main className="main-content">
-    <aside className="sidebar">
-      <h2>捷運站點</h2>
-      <ul>
-        {stationData.map(station => (
-          <li key={station.id} onClick={() => handleStationClick(station)}>
-            {station.name} ({station.id})
-          </li>
-        ))}
-      </ul>
-      <hr />
-      {mapViewActive && clickedPlace && showPlaceInfo && (
-        <div className="place-details-sidebar">
-          <h3>{clickedPlace.name}</h3>
-          <p>地址: {clickedPlace.address}</p>
-          {clickedPlace.rating !== undefined && (
-            <p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>
+      <main className="main-content">
+        <aside className="sidebar">
+          <h2>捷運站點</h2>
+          <ul>
+            {stationData.map(station => (
+              <li key={station.id} onClick={() => handleStationClick(station)}>
+                {station.name} ({station.id})
+              </li>
+            ))}
+          </ul>
+          <hr />
+
+          {selectedStation ? (
+            <>
+              <h2>{selectedStation.name} 的最愛 ({myFavoriteStores.length}/{MAX_FAVORITE_STORES_PER_STATION})</h2>
+              {myFavoriteStores.length > 0 ? (
+                <ul className="favorite-stores-list">
+                  {myFavoriteStores.map(store => (
+                    <li key={store.id} onClick={() => handleSidebarFavoriteStoreClick(store)}>
+                      {store.name}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>此捷運站尚無最愛店家。</p>
+              )}
+            </>
+          ) : mapViewActive ? (
+            <p>請先從左側列表選擇一個捷運站來查看收藏。</p>
+          ) : (
+            <p>點選捷運站以查看該站點的收藏店家。</p>
           )}
-          {clickedPlace.openingHours && (
-            <div>
-              <p>營業狀態: {clickedPlace.openingHours.isOpen && typeof clickedPlace.openingHours.isOpen === 'function'
-                ? (clickedPlace.openingHours.isOpen() ? "營業中" : "休息中")
-                : "未知"}</p>
+          <hr />
+
+          {mapViewActive && clickedPlace && showPlaceInfo && selectedStation && (
+            <div className="place-details-sidebar">
+              <h3>{clickedPlace.name}</h3>
+              <p>地址: {clickedPlace.address}</p>
+              {clickedPlace.rating !== undefined && (
+                <p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>
+              )}
+              {clickedPlace.openingHours && (
+                <div>
+                  <p>營業狀態: {
+                    typeof clickedPlace.openingHours.isOpen === 'function'
+                      ? (clickedPlace.openingHours.isOpen() ? "營業中" : "休息中")
+                      : (clickedPlace.openingHours.open_now !== undefined ? (clickedPlace.openingHours.open_now ? "營業中" : "休息中") : "未知")
+                  }</p>
+                  {/* 如果需要顯示詳細營業時間，可以遍歷 clickedPlace.openingHours.weekday_text */}
+                  {clickedPlace.openingHours.weekday_text && (
+                    <ul style={{fontSize: '0.8em', paddingLeft: '15px', marginTop: '5px'}}>
+                      {clickedPlace.openingHours.weekday_text.map((text, index) => (
+                        <li key={index}>{text}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
+                 <button style={{marginTop: '10px', backgroundColor: '#6c757d', color: 'white', padding: '8px 12px', border: 'none', borderRadius: '4px'}} disabled>
+                   已在 {selectedStation.name} 清單中
+                 </button>
+              ) : (
+                <button
+                  onClick={handleAddToMyList}
+                  disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION}
+                  style={{ marginTop: '10px' }}
+                  className="add-to-list-button"
+                >
+                  {isAddingToList ? "加入中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? `${selectedStation.name}清單已滿` : `加入 ${selectedStation.name} 最愛`)}
+                </button>
+              )}
+              <button onClick={() => { setShowPlaceInfo(false); setActiveInfoWindow(null); }} style={{ marginTop: '10px', marginLeft: '5px' }}>
+                關閉資訊
+              </button>
             </div>
           )}
-          <button
-            onClick={handleAddToMyList}
-            disabled={isAddingToList}
-            style={{ marginTop: '10px' }}
-            className="add-to-list-button"
-          >
-            {isAddingToList ? "加入中..." : "加入我的最愛"}
-          </button>
-          <button onClick={handleClosePlaceInfo} style={{ marginTop: '10px', marginLeft: '5px' }}>
-            關閉資訊
-          </button>
-        </div>
-      )}
-    </aside>
+        </aside>
 
-    <div className="map-area-container">
-      {!mapViewActive ? (
-        <div className="krtc-map-container">
-          <img src="img/krtc-map.png" alt="高雄捷運路線圖" className="krtc-map-image" />
-          {stationData.map((station) => {
-            const stationLineColor = lineColors[station.lines[0]] || '#555';
-            return (
-              <button
-                key={station.id}
-                className={`station-marker ${hoveredStation === station.id ? 'hovered' : ''}`}
-                style={{
-                  left: station.coords.x,
-                  top: station.coords.y,
-                  backgroundColor: '#FFFFFF',
-                  borderColor: stationLineColor,
-                }}
-                onClick={() => handleStationClick(station)}
-                onMouseEnter={() => setHoveredStation(station.id)}
-                onMouseLeave={() => setHoveredStation(null)}
-                title={station.name}
-              >
-                <span className="station-id-tooltip">{station.id}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : googleMapsApiKey ? (
-        <LoadScript
-          googleMapsApiKey={googleMapsApiKey}
-          libraries={libraries}
-          loadingElement={<div>地圖載入中...</div>}
-        >
-          <GoogleMap
-            mapContainerStyle={mapContainerStyle}
-            center={mapCenter}
-            zoom={defaultZoom}
-            onLoad={onLoad}
-            onUnmount={onUnmount}
-            onClick={handleMapPoiClick}
-            options={mapOptions}
-          >
-            {selectedStation && (
-              <Marker position={selectedStation.realCoords} title={selectedStation.name} />
-            )}
-
-            {clickedPlace && showPlaceInfo && (
-              <InfoWindow
-                position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }}
-                onCloseClick={handleClosePlaceInfo}
-              >
-                <div className="place-infowindow">
-                  <h4>{clickedPlace.name}</h4>
-                  <p>{clickedPlace.address?.substring(0, 20)}...</p>
-                  {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
+        <div className="map-area-container">
+          {!mapViewActive ? (
+            <div className="krtc-map-container">
+              <img
+                src="img/krtc-map.png"
+                alt="高雄捷運路線圖"
+                className="krtc-map-image"
+              />
+              {stationData.map((station) => {
+                const stationLineColor = lineColors[station.lines[0]] || '#555';
+                return (
                   <button
-                    onClick={handleAddToMyList}
-                    disabled={isAddingToList}
-                    className="add-to-list-button"
+                    key={station.id}
+                    className={`station-marker ${hoveredStation === station.id ? 'hovered' : ''}`}
+                    style={{
+                      left: station.coords.x,
+                      top: station.coords.y,
+                      backgroundColor: '#FFFFFF',
+                      borderColor: stationLineColor,
+                    }}
+                    onClick={() => handleStationClick(station)}
+                    onMouseEnter={() => setHoveredStation(station.id)}
+                    onMouseLeave={() => setHoveredStation(null)}
+                    title={station.name}
                   >
-                    {isAddingToList ? "加入中..." : "加入我的最愛"}
+                    <span className="station-id-tooltip">{station.id}</span>
                   </button>
-                </div>
-              </InfoWindow>
-            )}
-          </GoogleMap>
-        </LoadScript>
-      ) : (
-        <div>
-          {!googleMapsApiKey && <p>Google Maps API 金鑰未設定或無效。</p>}
+                );
+              })}
+            </div>
+          ) : googleMapsApiKey ? (
+            <LoadScript
+              googleMapsApiKey={googleMapsApiKey}
+              libraries={libraries}
+              loadingElement={<div>地圖載入中...</div>}
+            >
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={mapCenter}
+                zoom={defaultZoom}
+                onLoad={onLoad}
+                onUnmount={onUnmount}
+                onClick={handleMapPoiClick}
+                options={mapOptions}
+              >
+                {selectedStation && (
+                  <Marker position={selectedStation.realCoords} title={selectedStation.name} />
+                )}
+
+                {selectedStation && myFavoriteStores.map(store => (
+                  <Marker
+                    key={store.googlePlaceId}
+                    position={{ lat: store.lat, lng: store.lng }}
+                    title={store.name}
+                    icon={{
+                      url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+                    }}
+                    onClick={() => handleFavoriteStoreMarkerClick(store)}
+                  />
+                ))}
+
+                {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
+                  <InfoWindow
+                    key={clickedPlace.googlePlaceId}
+                    position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }}
+                    onCloseClick={handleClosePlaceInfo}
+                  >
+                    <div className="place-infowindow">
+                      <h4>{clickedPlace.name}</h4>
+                      <p>{clickedPlace.address?.substring(0, 25)}...</p>
+                      {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
+
+                      {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
+                        <p style={{color: 'green', fontSize: '0.9em', margin: '5px 0 0 0'}}>✓ 已在 {selectedStation.name} 最愛</p>
+                      ) : (
+                        <button
+                          onClick={handleAddToMyList}
+                          disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION}
+                          className="add-to-list-button"
+                          style={{fontSize: '0.9em', padding: '3px 6px'}}
+                        >
+                          {isAddingToList ? "處理中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? "此站已滿" : `加入 ${selectedStation.name} 最愛`)}
+                        </button>
+                      )}
+
+                      {clickedPlace.googlePlaceId && ( // 確保有 googlePlaceId
+                        <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`}
+                        target="_blank" // 在新分頁打開
+                        rel="noopener noreferrer" // 安全性考量
+                        style={{ display: 'block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
+                        >
+                        在 Google 地圖上查看
+                        </a>
+                    )}
+                    </div>
+                  </InfoWindow>
+                )}
+              </GoogleMap>
+            </LoadScript>
+          ) : (
+            <div>
+              {!googleMapsApiKey && <p>Google Maps API 金鑰未設定或無效。</p>}
+            </div>
+          )}
         </div>
-      )}
+      </main>
     </div>
-  </main>
-</div>
   );
 };
 

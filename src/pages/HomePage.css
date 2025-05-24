@@ -204,3 +204,33 @@ feedback-message {
   font-size: 0.9em; /* InfoWindow 內的按鈕可以小一點 */
   padding: 5px 8px;
 }
+
+.favorite-stores-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 10px 0;
+  max-height: 200px; /* 可選：如果列表太長，可以給個最大高度並允許滾動 */
+  overflow-y: auto;
+}
+
+.favorite-stores-list li {
+  padding: 8px 5px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 0.9em;
+  border-bottom: 1px dashed #eee; /* 分隔線 */
+}
+
+.favorite-stores-list li:last-child {
+  border-bottom: none;
+}
+
+.favorite-stores-list li:hover {
+  background-color: #e0e0e0; /* 淺灰色背景 */
+}
+
+.remove-from-list-button { /* 這是為將來的移除按鈕準備的 */
+  background-color: #dc3545; /* 紅色 */
+  color: white;
+  /* ... 其他樣式類似 add-to-list-button ... */
+}
