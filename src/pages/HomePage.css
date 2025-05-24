@@ -14,6 +14,21 @@
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #ccc;
+  position: relative; /* 為了讓返回按鈕可以相對於它定位 (如果需要) */
+}
+
+.back-button {
+  padding: 8px 15px;
+  background-color: #6c757d; /* 一個不同的顏色，例如灰色 */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 15px; /* 和登出按鈕保持一些距離 */
+}
+
+.back-button:hover {
+  background-color: #5a6268;
 }
 
 .homepage-header h1 {
@@ -154,3 +169,4 @@
   text-overflow: ellipsis;
   max-width: 100%; /* 確保它不超過按鈕寬度 */
 }
+
