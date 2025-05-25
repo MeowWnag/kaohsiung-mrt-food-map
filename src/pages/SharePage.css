@@ -1,0 +1,154 @@
+/* src/pages/SharePage.css */
+.share-page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden; /* 防止主容器滾動 */
+}
+
+.share-page-header {
+  background-color: #f8f9fa;
+  padding: 12px 20px; /* 稍微調整 padding */
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0; /* 防止 header 在 flex 佈局中被壓縮 */
+}
+
+.share-page-header h1 {
+  margin: 0;
+  font-size: 1.2em; /* 調整字體大小 */
+  color: #212529;
+  font-weight: 500;
+}
+
+.back-to-home-button {
+  padding: 7px 14px; /* 調整按鈕大小 */
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 0.25rem; /* Bootstrap 風格的圓角 */
+  font-size: 0.875em; /* 調整字體大小 */
+  transition: background-color 0.15s ease-in-out;
+}
+.back-to-home-button:hover {
+  background-color: #0056b3;
+}
+
+.share-page-content {
+  display: flex;
+  flex-grow: 1; /* 佔滿剩餘空間 */
+  overflow: hidden; /* 子元素超出的部分由它們自己處理滾動 */
+}
+
+.share-sidebar {
+  width: 280px; /* 調整寬度 */
+  background-color: #ffffff;
+  padding: 15px;
+  border-right: 1px solid #e9ecef;
+  overflow-y: auto; /* 允許側邊欄內容滾動 */
+  flex-shrink: 0; /* 防止側邊欄在 flex 佈局中被壓縮 */
+}
+
+.share-sidebar h2 {
+  margin-top: 0;
+  font-size: 1.05em; /* 調整字體大小 */
+  color: #343a40;
+  border-bottom: 1px solid #f1f3f5;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.shared-stores-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.shared-stores-list li {
+  padding: 10px 8px; /* 調整 padding */
+  cursor: pointer;
+  border-bottom: 1px solid #f8f9fa;
+  transition: background-color 0.2s ease;
+}
+.shared-stores-list li:last-child {
+  border-bottom: none;
+}
+.shared-stores-list li:hover,
+.shared-stores-list li.active-shared-store { /* 選中項的樣式 */
+  background-color: #e9f7fd; /* 淡藍色背景 */
+}
+.shared-stores-list li strong {
+  font-size: 0.95em; /* 調整字體大小 */
+  color: #212529;
+  display: block; /* 讓店名獨佔一行 */
+  margin-bottom: 2px;
+}
+.store-address-share {
+  font-size: 0.8em;
+  color: #6c757d;
+  margin: 0;
+}
+.store-rating-share {
+  font-size: 0.75em;
+  color: #adb5bd;
+  margin-top: 2px;
+}
+
+.share-map-area-container {
+  flex-grow: 1;
+  background-color: #f1f3f5; /* 地圖區域的背景色，以防地圖載入慢 */
+  position: relative; /* 如果需要在地圖上疊加元素 */
+}
+
+.place-infowindow-share {
+  padding: 10px;
+  max-width: 300px; /* InfoWindow 最大寬度 */
+  font-family: inherit; /* 繼承頁面字體 */
+}
+.place-infowindow-share h4 {
+  margin: 0 0 8px 0;
+  font-size: 1.1em;
+  color: #333;
+}
+.place-infowindow-share p {
+  margin: 4px 0;
+  font-size: 0.9em;
+  color: #555;
+}
+.google-maps-link-share {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.85em;
+  color: #007bff;
+  text-decoration: none;
+}
+.google-maps-link-share:hover {
+  text-decoration: underline;
+}
+
+.share-page-status {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.2em;
+  padding: 20px;
+  text-align: center;
+}
+.share-page-status.error {
+  color: #dc3545;
+}
+.share-page-link { /* 用於錯誤頁返回首頁的連結 */
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 5px;
+}
+.share-page-link:hover {
+  background-color: #0056b3;
+}

@@ -1,0 +1,315 @@
+/* src/pages/SharedMapViewerPage.css (或者你可以將這些樣式合併到 HomePage.css 或一個通用的 .css 檔案中) */
+
+/* 基礎容器樣式 (可以從 HomePage.css 繼承或複製) */
+.homepage-container { /* 重用 HomePage 的 class 名稱以共享佈局 */
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.homepage-header { /* 重用 */
+  background-color: #6c757d; /* 可以給分享頁一個不同的 header 顏色 */
+  color: white;
+  padding: 12px 20px;
+  border-bottom: 1px solid #495057;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.homepage-header h1 {
+  margin: 0;
+  font-size: 1.2em;
+  font-weight: 500;
+}
+
+.back-to-home-button { /* 用於 header 中的返回按鈕 */
+  padding: 7px 14px;
+  background-color: #f8f9fa;
+  color: #212529;
+  text-decoration: none;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  border: 1px solid #ced4da;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+.back-to-home-button:hover {
+  background-color: #e2e6ea;
+  border-color: #dae0e5;
+}
+
+.main-content { /* 重用 */
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.sidebar { /* 重用 */
+  width: 280px;
+  background-color: #ffffff;
+  padding: 15px;
+  border-right: 1px solid #e9ecef;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar h2 { /* 重用 */
+  margin-top: 0;
+  font-size: 1.05em;
+  color: #343a40;
+  border-bottom: 1px solid #f1f3f5;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.sidebar ul { /* 重用 */
+  list-style-type: none;
+  padding: 0;
+  margin: 0 0 15px 0; /* 給列表之間一些間距 */
+}
+
+.sidebar ul li { /* 重用 */
+  padding: 9px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid #f8f9fa;
+  transition: background-color 0.2s ease;
+  display: flex; /* 為了徽章 */
+  justify-content: space-between; /* 為了徽章 */
+  align-items: center; /* 為了徽章 */
+}
+.sidebar ul li:last-child {
+  border-bottom: none;
+}
+.sidebar ul li:hover,
+.sidebar ul li.active-station { /* 用於標記側邊欄選中的捷運站 */
+  background-color: #e9f7fd; /* 淡藍色背景 */
+  font-weight: normal; /* 移除 HomePage 中可能設定的 bold */
+}
+.sidebar ul li.active-station span:first-child { /* 讓選中站的文字加粗 */
+    font-weight: bold;
+}
+
+
+/* 側邊欄中，捷運站名旁顯示收藏數量的徽章 */
+.favorites-count-badge {
+  background-color: #007bff;
+  color: white;
+  font-size: 0.7em;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px; /* 更圓的徽章 */
+  margin-left: 8px;
+}
+/* 如果某個捷運站在分享數據中沒有收藏，可以隱藏徽章或不渲染 */
+.sidebar ul li:not(.has-shared-favorites-indicator) .favorites-count-badge {
+  /* display: none; */ /* 或者在 JS 中直接不渲染空的徽章 */
+}
+
+
+/* 分享的收藏店家列表樣式 */
+.favorite-stores-list { /* 重用 */
+  /* list-style-type: none; padding: 0; margin: 0; */ /* 已在 .sidebar ul 中定義 */
+}
+.favorite-stores-list li {
+  /* padding, cursor, border-bottom, transition, display, justify-content, align-items 已在 .sidebar ul li 中定義 */
+}
+.favorite-stores-list li .store-name { /* 重用 */
+  font-size: 0.95em;
+  color: #212529;
+  display: block;
+  margin-bottom: 2px;
+  flex-grow: 1; /* 讓店名佔滿可用空間 */
+}
+.favorite-stores-list li .store-name:hover {
+  text-decoration: underline;
+}
+
+
+/* 店家詳細資訊側邊欄 (唯讀) */
+.place-details-sidebar { /* 重用 */
+  padding: 15px;
+  border-top: 1px solid #e9ecef;
+  margin-top: 15px;
+}
+.place-details-sidebar h3 { /* 重用 */
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.15em;
+}
+.place-details-sidebar p { /* 重用 */
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #495057;
+}
+.place-details-sidebar ul { /* 用於營業時間列表 */
+  font-size: 0.8em !important; /* 強制 */
+  padding-left: 18px !important; /* 強制 */
+  margin-top: 5px !important; /* 強制 */
+  list-style-type: disc !important; /* 強制 */
+}
+.place-details-sidebar ul li {
+  padding: 2px 0 !important; /* 強制 */
+  border-bottom: none !important; /* 強制 */
+  cursor: default !important; /* 強制 */
+  background-color: transparent !important; /* 強制 */
+}
+.place-details-sidebar button { /* 關閉資訊按鈕 */
+  margin-top: 15px !important;
+  padding: 6px 12px !important;
+  font-size: 0.85em !important;
+  background-color: #6c757d !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+}
+.place-details-sidebar button:hover {
+  background-color: #5a6268 !important;
+}
+
+
+/* 地圖區域 */
+.map-area-container { /* 重用 */
+  flex-grow: 1;
+  background-color: #f1f3f5;
+  position: relative;
+}
+
+/* 路線圖容器 (如果 SharedMapViewerPage 也顯示路線圖) */
+.krtc-map-container { /* 重用 */
+  position: relative;
+  width: 1100px; /* 根據你的路線圖圖片大小調整 */
+  height: 1516px; /* 根據你的路線圖圖片大小調整 */
+  margin: auto; /* 居中 */
+  overflow: hidden; /* 如果圖片比容器大 */
+}
+.krtc-map-image { /* 重用 */
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain; /* 或 scale-down */
+}
+
+/* 路線圖上的站點標記 */
+.station-marker { /* 重用 */
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid; /* 顏色由 JS 設定 */
+  background-color: white; /* 預設背景 */
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+.station-marker:hover,
+.station-marker.hovered { /* 重用 */
+  transform: translate(-50%, -50%) scale(1.25);
+  z-index: 10;
+  box-shadow: 0 0 8px rgba(0,0,0,0.5);
+}
+.station-marker .station-id-tooltip { /* 重用 */
+  font-size: 10px;
+  font-weight: 900;
+  color: #333;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.station-marker.has-favorites-shared { /* 用於路線圖上標記有分享收藏的站點 */
+  /* background-color is set by JS, can add other distinct styles */
+  /* border-width: 4px; */
+  /* animation: pulse 1.5s infinite; */
+}
+/* @keyframes pulse { 0% { box-shadow: 0 0 5px rgba(255, 235, 59, 0.7); } 50% { box-shadow: 0 0 15px rgba(255, 235, 59, 1); } 100% { box-shadow: 0 0 5px rgba(255, 235, 59, 0.7); } } */
+
+
+/* InfoWindow 樣式 (可以與 HomePage 的 InfoWindow 共享或獨立) */
+.place-infowindow { /* 重用 */
+  padding: 10px;
+  max-width: 300px;
+  font-family: inherit;
+}
+.place-infowindow h4 { /* 重用 */
+  margin: 0 0 8px 0;
+  font-size: 1.1em;
+  color: #333;
+}
+.place-infowindow p { /* 重用 */
+  margin: 4px 0;
+  font-size: 0.9em;
+  color: #555;
+}
+.place-infowindow a { /* 重用 for "在Google地圖上查看" */
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.85em;
+  color: #007bff;
+  text-decoration: none;
+}
+.place-infowindow a:hover { /* 重用 */
+  text-decoration: underline;
+}
+
+
+/* 載入中和錯誤狀態的全局提示 (可以放在 App.css 或 index.css) */
+.share-page-status, /* SharedMapViewerPage 和 SharePage 都可以用 */
+.app-loading-container, /* App.js 用 */
+.app-error-container { /* App.js 用 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* 佔滿整個視窗 */
+  font-size: 1.2em;
+  padding: 20px;
+  text-align: center;
+  box-sizing: border-box; /* 確保 padding 不會讓元素超出 100vh */
+  color: #495057; /* 預設文字顏色 */
+}
+.share-page-status.error,
+.app-error-container {
+  color: #dc3545; /* 紅色表示錯誤 */
+}
+.share-page-status.error h1, /* 如果錯誤訊息中有 h1 */
+.app-error-container h1 {
+  color: #dc3545;
+  margin-bottom: 15px;
+}
+.share-page-link { /* 用於錯誤頁返回首頁的連結 */
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 5px;
+  transition: background-color 0.15s ease-in-out;
+}
+.share-page-link:hover {
+  background-color: #0056b3;
+}
+
+/* 如果需要，為返回路線圖按鈕在分享頁面做特定調整 */
+.homepage-header .back-button { /* 重用 HomePage 的返回按鈕樣式 */
+  padding: 7px 14px;
+  background-color: #adb5bd; /* 分享頁的返回按鈕顏色可以不同 */
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  cursor: pointer;
+  margin-right: 15px;
+  transition: background-color 0.15s ease-in-out;
+}
+.homepage-header .back-button:hover {
+  background-color: #868e96;
+}
