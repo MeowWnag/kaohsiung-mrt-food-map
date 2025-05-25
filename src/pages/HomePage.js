@@ -8,7 +8,7 @@ import {
   doc, deleteDoc // 稍後刪除功能會用到
 } from "firebase/firestore";
 import { stationData, lineColors } from '../data/stations'; // 確保路徑正確
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, Marker, InfoWindow } from '@react-google-maps/api';
 import './HomePage.css'; // 確保引入 CSS
 
 const mapContainerStyle = {
@@ -448,87 +448,81 @@ const HomePage = ({ user }) => {
               })}
             </div>
           ) : googleMapsApiKey ? (
-            <LoadScript
-              googleMapsApiKey={googleMapsApiKey}
-              libraries={libraries}
-              loadingElement={<div>地圖載入中...</div>}
+            <GoogleMap
+              mapContainerStyle={mapContainerStyle}
+              center={mapCenter}
+              zoom={defaultZoom}
+              onLoad={onLoad}
+              onUnmount={onUnmount}
+              onClick={handleMapPoiClick}
+              options={mapOptions}
             >
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                center={mapCenter} // 確保 mapCenter 已定義
-                zoom={defaultZoom}
-                onLoad={onLoad} // 確保 onLoad 已定義
-                onUnmount={onUnmount} // 確保 onUnmount 已定義
-                onClick={handleMapPoiClick}
-                options={mapOptions} // 確保 mapOptions 已定義
-              >
-                {selectedStation && (
-                  <Marker position={selectedStation.realCoords} title={selectedStation.name} />
-                )}
+              {selectedStation && (
+                <Marker position={selectedStation.realCoords} title={selectedStation.name} />
+              )}
 
-                {selectedStation && myFavoriteStores.map(store => (
-                  <Marker
-                    key={store.googlePlaceId}
-                    position={{ lat: store.lat, lng: store.lng }}
-                    title={store.name}
-                    icon={{
-                      url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
-                    }}
-                    onClick={() => handleFavoriteStoreMarkerClick(store)}
-                  />
-                ))}
+              {selectedStation && myFavoriteStores.map(store => (
+                <Marker
+                  key={store.googlePlaceId}
+                  position={{ lat: store.lat, lng: store.lng }}
+                  title={store.name}
+                  icon={{
+                    url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+                  }}
+                  onClick={() => handleFavoriteStoreMarkerClick(store)}
+                />
+              ))}
 
-                {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
-                  <InfoWindow
-                    key={clickedPlace.googlePlaceId}
-                    position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }}
-                    onCloseClick={handleClosePlaceInfo}
-                  >
-                    <div className="place-infowindow">
-                      <h4>{clickedPlace.name}</h4>
-                      <p>{clickedPlace.address?.substring(0, 25)}...</p>
-                      {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
+              {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
+                <InfoWindow
+                  key={clickedPlace.googlePlaceId}
+                  position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }}
+                  onCloseClick={handleClosePlaceInfo}
+                >
+                  <div className="place-infowindow">
+                    <h4>{clickedPlace.name}</h4>
+                    <p>{clickedPlace.address?.substring(0, 25)}...</p>
+                    {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
 
-                      {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
-                        <button
-                          onClick={() => {
-                            const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId);
-                            if (storeInList) {
-                              handleRemoveFromMyList(storeInList);
-                            }
-                          }}
-                          disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)}
-                          className="remove-button-small infowindow-button"
-                          style={{marginTop: '5px'}}
-                        >
-                          {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : "從最愛移除"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleAddToMyList}
-                          disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION}
-                          className="add-to-list-button"
-                          style={{fontSize: '0.9em', padding: '3px 6px', marginTop: '5px'}}
-                        >
-                          {isAddingToList ? "處理中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? "此站已滿" : `加入 ${selectedStation.name} 最愛`)}
-                        </button>
-                      )}
-                      <br/>
-                       {clickedPlace.googlePlaceId && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
-                        >
-                          在 Google 地圖上查看
-                        </a>
-                      )}
-                    </div>
-                  </InfoWindow>
-                )}
-              </GoogleMap>
-            </LoadScript>
+                    {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
+                      <button
+                        onClick={() => {
+                          const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId);
+                          if (storeInList) {
+                            handleRemoveFromMyList(storeInList);
+                          }
+                        }}
+                        disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)}
+                        className="remove-button-small infowindow-button"
+                        style={{marginTop: '5px'}}
+                      >
+                        {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : "從最愛移除"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAddToMyList}
+                        disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION}
+                        className="add-to-list-button"
+                        style={{fontSize: '0.9em', padding: '3px 6px', marginTop: '5px'}}
+                      >
+                        {isAddingToList ? "處理中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? "此站已滿" : `加入 ${selectedStation.name} 最愛`)}
+                      </button>
+                    )}
+                    <br/>
+                     {clickedPlace.googlePlaceId && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
+                      >
+                        在 Google 地圖上查看
+                      </a>
+                    )}
+                  </div>
+                </InfoWindow>
+              )}
+            </GoogleMap>
           ) : (
             <div>
               {!googleMapsApiKey && <p>Google Maps API 金鑰未設定或無效。</p>}

@@ -290,3 +290,58 @@ feedback-message {
   color: white;
   /* ... 其他樣式類似 add-to-list-button ... */
 }
+
+.share-list-button {
+  padding: 5px 10px;
+  font-size: 0.8em;
+  background-color: #17a2b8; /* 資訊藍 */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.share-list-button:hover {
+  background-color: #138496;
+}
+.share-list-button:disabled {
+  background-color: #6c757d;
+}
+
+.generated-share-link {
+  margin-top: 5px;
+  padding: 5px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.generated-share-link p {
+  margin: 0 0 3px 0;
+  font-weight: bold;
+}
+.generated-share-link input {
+  padding: 3px;
+  border: 1px solid #ced4da;
+  border-radius: 3px;
+}
+.generated-share-link button {
+  padding: 3px 8px;
+  margin-left: 5px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.generated-share-link button:hover{
+  background-color: #0056b3;
+}
+
+/* 確保 header 空間足夠 */
+.homepage-header > div {
+    display: flex;
+    flex-direction: column; /* 讓 feedback 和 share link 垂直排列 */
+    align-items: flex-end;
+}
+.homepage-header .logout-button {
+    margin-top: 5px; /* 給登出按鈕一點空間 */
+}

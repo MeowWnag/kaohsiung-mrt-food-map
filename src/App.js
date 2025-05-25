@@ -3,10 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from './firebase'; // 引入 auth
+import { LoadScript } from '@react-google-maps/api';
 
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import './App.css'; // 你可以保留或修改預設的 App.css
+
+const libraries = ["places"];
+const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 function App() {
   const [user, setUser] = useState(null); // 用來儲存登入的使用者資訊
@@ -34,20 +38,26 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route
-          path="/login"
-          element={!user ? <LoginPage /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/"
-          element={user ? <HomePage user={user} /> : <Navigate to="/login" replace />}
-        />
-        {/* 可以新增一個 404 頁面或其他路由 */}
-        <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
-      </Routes>
-    </Router>
+    <LoadScript
+      googleMapsApiKey={googleMapsApiKey}
+      libraries={libraries}
+      loadingElement={<div>地圖載入中...</div>}
+    >
+      <Router>
+        <Routes>
+          <Route
+            path="/login"
+            element={!user ? <LoginPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/"
+            element={user ? <HomePage user={user} /> : <Navigate to="/login" replace />}
+          />
+          {/* 可以新增一個 404 頁面或其他路由 */}
+          <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
+        </Routes>
+      </Router>
+    </LoadScript>
   );
 }
 
