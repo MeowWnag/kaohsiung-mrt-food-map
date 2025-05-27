@@ -129,12 +129,17 @@ const HomePage = ({ user }) => {
 
   const handleMapPoiClick = (event) => {
     const placeId = event.placeId;
-    if (!placeId || !mapRef.current || !selectedStation) { // 使用 mapRef.current
+    if (!placeId || !mapRef.current || !selectedStation) {
       console.warn("Place ID, Map instance, or Selected Station is not available for POI click.");
       return;
     }
 
-    const placesService = new window.google.maps.places.PlacesService(mapRef.current); // 使用 mapRef.current
+    // 先清除舊的狀態
+    setActiveInfoWindow(null);
+    setClickedPlace(null);
+    setShowPlaceInfo(false);
+
+    const placesService = new window.google.maps.places.PlacesService(mapRef.current);
     placesService.getDetails({
       placeId: placeId,
       fields: [
@@ -145,22 +150,32 @@ const HomePage = ({ user }) => {
     }, (place, status) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
         const newClickedPlace = {
-          name: place.name,
-          address: place.formatted_address,
+          name: place.name || '未知店家',
+          address: place.formatted_address || '地址不詳',
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
           googlePlaceId: place.place_id,
           rating: place.rating,
           userRatingsTotal: place.user_ratings_total,
-          photos: place.photos ? place.photos.map(p => ({ getUrl: (options) => p.getUrl(options), photo_reference: p.photo_reference })) : [],
+          photos: place.photos ? place.photos.map(p => ({ 
+            getUrl: (options) => p.getUrl(options), 
+            photo_reference: p.photo_reference 
+          })) : [],
           openingHours: place.opening_hours,
           types: place.types,
           website: place.website,
           phoneNumber: place.formatted_phone_number
         };
+        
+        // 確保狀態按順序更新
         setClickedPlace(newClickedPlace);
-        setShowPlaceInfo(true); // 自動打開側邊欄資訊
-        setActiveInfoWindow(newClickedPlace.googlePlaceId); // 自動打開 InfoWindow
+        setShowPlaceInfo(true);
+        
+        // 使用 setTimeout 確保 clickedPlace 狀態更新完成後再設置 InfoWindow
+        setTimeout(() => {
+          setActiveInfoWindow(newClickedPlace.googlePlaceId);
+        }, 100);
+        
         setFeedbackMessage('');
       } else {
         console.error("Failed to get place details:", status, place);
@@ -173,14 +188,18 @@ const HomePage = ({ user }) => {
   };
   
   const handleFavoriteStoreMarkerClick = (store) => {
-    setActiveInfoWindow(null); // 先清除舊的 InfoWindow
+    // 先清除舊的狀態
+    setActiveInfoWindow(null);
+    setClickedPlace(null);
+    
+    // 設置新的店家資料
     setClickedPlace(store);
     setShowPlaceInfo(true);
     
     // 使用 setTimeout 確保狀態更新完成後再設置新的 InfoWindow
     setTimeout(() => {
       setActiveInfoWindow(store.googlePlaceId);
-    }, 0);
+    }, 100);
     
     if (mapRef.current && store.lat && store.lng) {
       mapRef.current.panTo({ lat: store.lat, lng: store.lng });
@@ -453,22 +472,56 @@ const HomePage = ({ user }) => {
             >
               {selectedStation && (<Marker position={selectedStation.realCoords} title={selectedStation.name} />)}
               {selectedStation && myFavoriteStores.map(store => (<Marker key={store.googlePlaceId} position={{ lat: store.lat, lng: store.lng }} title={store.name} icon={{url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"}} onClick={() => handleFavoriteStoreMarkerClick(store)}/> ))}
-              {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
-                <InfoWindow key={clickedPlace.googlePlaceId} position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }} onCloseClick={handleClosePlaceInfo}>
+              {clickedPlace && 
+               activeInfoWindow === clickedPlace.googlePlaceId && 
+               selectedStation && 
+               clickedPlace.name && 
+               clickedPlace.lat && 
+               clickedPlace.lng && (
+                <InfoWindow 
+                  key={`${clickedPlace.googlePlaceId}-${Date.now()}`} // 添加時間戳確保重新渲染
+                  position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }} 
+                  onCloseClick={handleClosePlaceInfo}
+                >
                   <div className="place-infowindow">
-                    <h4>{clickedPlace.name}</h4> <p>{clickedPlace.address?.substring(0, 25)}...</p>
-                    {clickedPlace.rating !== undefined && <p>評分: {clickedPlace.rating} / 5</p>}
+                    <h4>{clickedPlace.name}</h4>
+                    <p>{clickedPlace.address?.substring(0, 25)}...</p>
+                    {clickedPlace.rating !== undefined && (
+                      <p>評分: {clickedPlace.rating} / 5</p>
+                    )}
                     {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
-                      <button onClick={() => { const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId); if (storeInList) handleRemoveFromMyList(storeInList);}} disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)} className="remove-button-small infowindow-button" style={{marginTop: '5px'}}>
+                      <button 
+                        onClick={() => { 
+                          const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId); 
+                          if (storeInList) handleRemoveFromMyList(storeInList);
+                        }} 
+                        disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)} 
+                        className="remove-button-small infowindow-button" 
+                        style={{marginTop: '5px'}}
+                      >
                         {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : "從最愛移除"}
                       </button>
                     ) : (
-                      <button onClick={handleAddToMyList} disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION} className="add-to-list-button" style={{fontSize: '0.9em', padding: '3px 6px', marginTop: '5px'}}>
+                      <button 
+                        onClick={handleAddToMyList} 
+                        disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION} 
+                        className="add-to-list-button" 
+                        style={{fontSize: '0.9em', padding: '3px 6px', marginTop: '5px'}}
+                      >
                         {isAddingToList ? "處理中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? "此站已滿" : `加入 ${selectedStation.name} 最愛`)}
                       </button>
                     )}
                     <br/>
-                    {clickedPlace.googlePlaceId && (<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}>在 Google 地圖上查看</a>)}
+                    {clickedPlace.googlePlaceId && (
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
+                      >
+                        在 Google 地圖上查看
+                      </a>
+                    )}
                   </div>
                 </InfoWindow>
               )}

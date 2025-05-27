@@ -67,6 +67,7 @@ function App() {
           <p>地圖資源載入中...</p>
         </div>
       }
+      version="beta"
       onError={e => { // 處理 LoadScript 載入錯誤
         console.error("Google Maps API LoadScript Error:", e);
         // 你可以在這裡設置一個狀態來顯示一個全局的 API 載入錯誤訊息給用戶
