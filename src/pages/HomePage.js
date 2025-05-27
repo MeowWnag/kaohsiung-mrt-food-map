@@ -125,6 +125,7 @@ const HomePage = ({ user }) => {
     setActiveInfoWindow(null);
     setFeedbackMessage('');
     setGeneratedShareLink('');
+    setHoveredStation(null); // 新增這行來重置懸停狀態
   };
 
   const handleMapPoiClick = (event) => {
