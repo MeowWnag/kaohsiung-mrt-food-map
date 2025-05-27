@@ -173,9 +173,15 @@ const HomePage = ({ user }) => {
   };
   
   const handleFavoriteStoreMarkerClick = (store) => {
+    setActiveInfoWindow(null); // 先清除舊的 InfoWindow
     setClickedPlace(store);
     setShowPlaceInfo(true);
-    setActiveInfoWindow(store.googlePlaceId);
+    
+    // 使用 setTimeout 確保狀態更新完成後再設置新的 InfoWindow
+    setTimeout(() => {
+      setActiveInfoWindow(store.googlePlaceId);
+    }, 0);
+    
     if (mapRef.current && store.lat && store.lng) {
       mapRef.current.panTo({ lat: store.lat, lng: store.lng });
     }
