@@ -414,23 +414,26 @@ const HomePage = ({ user }) => {
             : ( <p>點選捷運站以查看該站點的收藏店家。</p> )}
           <hr />
 
-          {mapViewActive && clickedPlace && showPlaceInfo && selectedStation && (
+          {/* 店家詳細資訊 (側邊欄，唯讀) */}
+          {mapViewActive && clickedPlace && selectedStation && (
             <div className="place-details-sidebar">
               <h3>{clickedPlace.name}</h3>
               <p>地址: {clickedPlace.address}</p>
-              {clickedPlace.rating !== undefined && (<p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>)}
-              {clickedPlace.openingHours && (<div><p>營業狀態: { typeof clickedPlace.openingHours.isOpen === 'function' ? (clickedPlace.openingHours.isOpen() ? "營業中" : "休息中") : (clickedPlace.openingHours.open_now !== undefined ? (clickedPlace.openingHours.open_now ? "營業中" : "休息中") : "未知")}</p>{clickedPlace.openingHours.weekday_text && (<ul style={{fontSize: '0.8em', paddingLeft: '15px', marginTop: '5px'}}>{clickedPlace.openingHours.weekday_text.map((text, index) => (<li key={index}>{text}</li>))}</ul>)}</div>)}
-              
-              {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
-                 <button onClick={() => { const storeInList = myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId); if (storeInList) handleRemoveFromMyList(storeInList);}} disabled={isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id)} style={{ marginTop: '10px' }} className="remove-from-list-button">
-                   {isRemovingFromList && clickedPlace.id === (myFavoriteStores.find(s => s.googlePlaceId === clickedPlace.googlePlaceId)?.id) ? "移除中..." : `從 ${selectedStation.name} 最愛移除`}
-                 </button>
-              ) : (
-                <button onClick={handleAddToMyList} disabled={isAddingToList || myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION} style={{ marginTop: '10px' }} className="add-to-list-button">
-                  {isAddingToList ? "加入中..." : (myFavoriteStores.length >= MAX_FAVORITE_STORES_PER_STATION ? `${selectedStation.name}清單已滿` : `加入 ${selectedStation.name} 最愛`)}
-                </button>
+              {clickedPlace.rating !== undefined && (
+                <p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>
               )}
-              <button onClick={() => { setShowPlaceInfo(false); setActiveInfoWindow(null); }} style={{ marginTop: '10px', marginLeft: '5px' }}>
+              {/* 可以從 clickedPlace (來自 allStationsFavorites) 中獲取已儲存的 openingHoursText */}
+              {clickedPlace.openingHoursText && Array.isArray(clickedPlace.openingHoursText) && (
+                <div>
+                  <p>營業時間:</p>
+                  <ul style={{fontSize: '0.8em', paddingLeft: '15px', marginTop: '5px'}}>
+                    {clickedPlace.openingHoursText.map((text, index) => (
+                      <li key={index}>{text}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <button onClick={handleClosePlaceInfo} style={{ marginTop: '10px', marginLeft: '5px' }}>
                 關閉資訊
               </button>
             </div>
