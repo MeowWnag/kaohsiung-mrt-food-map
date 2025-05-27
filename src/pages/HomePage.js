@@ -199,19 +199,68 @@ const HomePage = ({ user }) => {
   const handleFavoriteStoreMarkerClick = (store) => {
     // 先清除舊的狀態
     setActiveInfoWindow(null);
-    setClickedPlace(null);
-    
-    // 設置新的店家資料
-    setClickedPlace(store);
+    // setClickedPlace(null); // 清除舊的，下面會立即設置
+
+    // 立即用收藏的店家資料設置 clickedPlace，以便快速顯示基本資訊
+    setClickedPlace({ ...store }); // 複製 store 物件以避免直接修改狀態中的 myFavoriteStores
     setShowPlaceInfo(true);
-    
-    // 使用 setTimeout 確保狀態更新完成後再設置新的 InfoWindow
-    setTimeout(() => {
-      setActiveInfoWindow(store.googlePlaceId);
-    }, 100);
-    
+
     if (mapRef.current && store.lat && store.lng) {
       mapRef.current.panTo({ lat: store.lat, lng: store.lng });
+    }
+
+    // 獲取並更新即時店家資訊
+    if (mapRef.current && window.google && window.google.maps && window.google.maps.places) {
+      const placesService = new window.google.maps.places.PlacesService(mapRef.current);
+      placesService.getDetails({
+        placeId: store.googlePlaceId,
+        fields: [
+          'name', 'formatted_address', 'geometry.location', 'place_id',
+          'rating', 'user_ratings_total', 'photos', 'opening_hours',
+          'types', 'website', 'formatted_phone_number'
+        ]
+      }, (place, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+          const updatedStoreDetails = {
+            ...store, // 保留原收藏的 ID 和其他 Firestore 特定欄位
+            name: place.name || store.name,
+            address: place.formatted_address || store.address,
+            lat: place.geometry?.location?.lat() || store.lat,
+            lng: place.geometry?.location?.lng() || store.lng,
+            rating: place.rating, // 使用 API 回傳的評分
+            userRatingsTotal: place.user_ratings_total, // 使用 API 回傳的評分總數
+            photos: place.photos ? place.photos.map(p => ({ 
+              getUrl: (options) => p.getUrl(options), 
+              photo_reference: p.photo_reference 
+            })) : (store.photos || []), // 如果 API 有照片則使用，否則保留原有的 (如果有的話)
+            openingHours: place.opening_hours, // !!! 這是主要的即時資訊來源
+            types: place.types,
+            website: place.website,
+            phoneNumber: place.formatted_phone_number,
+            // openingHoursText: place.opening_hours?.weekday_text || store.openingHoursText, // 優先使用 API 的 weekday_text
+          };
+          setClickedPlace(updatedStoreDetails);
+          // 確保 InfoWindow 在 clickedPlace 更新後再顯示/刷新
+          setTimeout(() => {
+            setActiveInfoWindow(store.googlePlaceId);
+          }, 50);
+        } else {
+          console.error(`無法獲取收藏店家 ${store.name} 的即時詳細資訊: ${status}`);
+          setFeedbackMessage(`無法更新 ${store.name} 的即時資訊，顯示庫存資料。`);
+          // 即使獲取失敗，也要確保 InfoWindow 顯示 (使用庫存資料)
+          setClickedPlace({ ...store }); // 確保是庫存資料
+          setTimeout(() => {
+            setActiveInfoWindow(store.googlePlaceId);
+          }, 50);
+        }
+      });
+    } else {
+      // 若沒有 map instance 或 Google Places API，則只顯示庫存資料
+      console.warn("Map instance or Google Places API not available for fetching favorite store details.");
+      // 確保 InfoWindow 顯示 (使用庫存資料)
+      setTimeout(() => {
+        setActiveInfoWindow(store.googlePlaceId);
+      }, 100);
     }
   };
   
@@ -450,17 +499,35 @@ const HomePage = ({ user }) => {
               {clickedPlace.rating !== undefined && (
                 <p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>
               )}
-              {/* 可以從 clickedPlace (來自 allStationsFavorites) 中獲取已儲存的 openingHoursText */}
-              {clickedPlace.openingHoursText && Array.isArray(clickedPlace.openingHoursText) && (
-                <div>
-                  <p>營業時間:</p>
-                  <ul style={{fontSize: '0.8em', paddingLeft: '15px', marginTop: '5px'}}>
-                    {clickedPlace.openingHoursText.map((text, index) => (
-                      <li key={index}>{text}</li>
-                    ))}
-                  </ul>
+              {/* 即時營業狀態 */}
+              {clickedPlace.openingHours && typeof clickedPlace.openingHours.open_now === 'boolean' && (
+                <div style={{ 
+                  fontSize: '0.9em', 
+                  marginTop: '10px', 
+                  marginBottom: (clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText) ? '0px' : '5px', 
+                  color: clickedPlace.openingHours.open_now ? 'green' : 'red', 
+                  fontWeight: 'bold' 
+                }}>
+                  目前狀態: {clickedPlace.openingHours.open_now ? '營業中' : '休息中'}
                 </div>
               )}
+              {/* 顯示營業時間 - 支援兩種格式：已保存的和即時獲取的 */}
+              {(clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText) && (
+                      <div style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                        <strong>詳細營業時間:</strong>
+                        <div style={{ paddingLeft: '15px', marginTop: '3px', marginBottom: '5px' }}>
+                          {(() => {
+                            const openingHoursSource = clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText;
+                            if (openingHoursSource && Array.isArray(openingHoursSource)) {
+                              return openingHoursSource.map((dailyHours, index) => (
+                                <div key={index} style={{ marginBottom: '1px' }}>{dailyHours}</div>
+                              ));
+                            }
+                            return <span style={{ marginBottom: '1px' }}>營業時間資訊不完整</span>;
+                          })()}
+                        </div>
+                      </div>
+                    )}
               <button onClick={handleClosePlaceInfo} style={{ marginTop: '10px', marginLeft: '5px' }}>
                 關閉資訊
               </button>
@@ -495,9 +562,67 @@ const HomePage = ({ user }) => {
                 >
                   <div className="place-infowindow">
                     <h4>{clickedPlace.name}</h4>
-                    <p>{clickedPlace.address ? (clickedPlace.address.substring(0, 25) + '...') : '地址不詳'}</p>
+                    <p>{clickedPlace.address ? (clickedPlace.address.length > 25 ? clickedPlace.address.substring(0, 25) + '...' : clickedPlace.address) : '地址不詳'}</p>
                     {clickedPlace.rating !== undefined && (
                       <p>評分: {clickedPlace.rating} / 5</p>
+                    )}
+                    {/* 即時營業狀態 */}
+                    {clickedPlace.openingHours && typeof clickedPlace.openingHours.open_now === 'boolean' && (
+                      <div style={{ 
+                        fontSize: '0.9em', 
+                        marginTop: '5px', 
+                        marginBottom: (clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText) ? '2px' : '5px',
+                        color: clickedPlace.openingHours.open_now ? 'green' : 'red', 
+                        fontWeight: 'bold' 
+                      }}>
+                        {clickedPlace.openingHours.open_now ? '目前營業中' : '目前休息中'}
+                      </div>
+                    )}
+                    {/* 顯示今日營業時間 (無論上面是否有即時狀態，都可作為補充) */}
+                    {(clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText) && (
+                      <div style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                        <strong>今日時段:</strong>
+                        <span style={{ marginLeft: '5px' }}>
+                          {(() => {
+                            const openingHoursSource = clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText;
+                            if (openingHoursSource && Array.isArray(openingHoursSource)) {
+                              const today = new Date().getDay(); // 0 = 星期日, 1 = 星期一, ...
+                              const todayIndex = (today === 0) ? 6 : today - 1; // Google API weekday_text: Monday is 0, Sunday is 6
+                              
+                              let todayText = '';
+                              if (clickedPlace.openingHours && clickedPlace.openingHours.periods) { // 優先使用 periods (更精確)
+                                const now = new Date();
+                                const currentDayPeriods = clickedPlace.openingHours.periods.filter(p => p.open && p.open.day === today);
+                                if (currentDayPeriods.length > 0) {
+                                   todayText = currentDayPeriods.map(p => {
+                                    const openTime = `${String(p.open.hours).padStart(2, '0')}:${String(p.open.minutes).padStart(2, '0')}`;
+                                    if (p.close) {
+                                      const closeTime = `${String(p.close.hours).padStart(2, '0')}:${String(p.close.minutes).padStart(2, '0')}`;
+                                      return `${openTime} – ${closeTime}`;
+                                    }
+                                    return `${openTime} – (營業中)`; // 24小時營業且當下是營業日
+                                  }).join(', ');
+                                } else if (clickedPlace.openingHours.open_now === false && openingHoursSource[todayIndex] && (openingHoursSource[todayIndex].includes("休息") || openingHoursSource[todayIndex].includes("Closed"))) {
+                                    todayText = "休息";
+                                } else if (openingHoursSource[todayIndex]) { // Fallback to weekday_text if periods don't cover it but weekday_text exists
+                                    todayText = openingHoursSource[todayIndex].substring(openingHoursSource[todayIndex].indexOf(':') + 1).trim();
+                                } else {
+                                    todayText = "資訊不詳";
+                                }
+
+                              } else if (openingHoursSource[todayIndex]) { // Fallback to weekday_text if no live openingHours object
+                                todayText = openingHoursSource[todayIndex];
+                                const timePart = todayText.substring(todayText.indexOf(':') + 1).trim();
+                                return timePart || (todayText.includes("休息") || todayText.includes("Closed") ? "休息" : "資訊不詳");
+                              } else {
+                                return '資訊不完整';
+                              }
+                              return todayText || "資訊不詳";
+                            }
+                            return '資訊不完整';
+                          })()}
+                        </span>
+                      </div>
                     )}
                     {myFavoriteStores.some(s => s.googlePlaceId === clickedPlace.googlePlaceId) ? (
                       <button 
