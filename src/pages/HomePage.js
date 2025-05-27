@@ -495,6 +495,13 @@ const HomePage = ({ user }) => {
           {mapViewActive && clickedPlace && selectedStation && (
             <div className="place-details-sidebar">
               <h3>{clickedPlace.name}</h3>
+              {clickedPlace.photos && clickedPlace.photos.length > 0 && (
+                <img 
+                  src={clickedPlace.photos[0].getUrl({ maxWidth: 300, maxHeight: 200 })} 
+                  alt={`${clickedPlace.name} 的照片`} 
+                  style={{ width: '100%', height: 'auto', marginTop: '10px', borderRadius: '4px', marginBottom: '10px' }} 
+                />
+              )}
               <p>地址: {clickedPlace.address}</p>
               {clickedPlace.rating !== undefined && (
                 <p>評分: {clickedPlace.rating} ({clickedPlace.userRatingsTotal || 0} 則評論)</p>
@@ -562,6 +569,13 @@ const HomePage = ({ user }) => {
                 >
                   <div className="place-infowindow">
                     <h4>{clickedPlace.name}</h4>
+                    {clickedPlace.photos && clickedPlace.photos.length > 0 && (
+                      <img 
+                        src={clickedPlace.photos[0].getUrl({ maxWidth: 150, maxHeight: 100 })} 
+                        alt={`${clickedPlace.name} 的照片`}
+                        style={{ maxWidth: '100%', height: 'auto', marginTop: '5px', marginBottom: '5px', borderRadius: '3px' }}
+                      />
+                    )}
                     <p>{clickedPlace.address ? (clickedPlace.address.length > 25 ? clickedPlace.address.substring(0, 25) + '...' : clickedPlace.address) : '地址不詳'}</p>
                     {clickedPlace.rating !== undefined && (
                       <p>評分: {clickedPlace.rating} / 5</p>
