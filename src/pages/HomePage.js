@@ -149,11 +149,13 @@ const HomePage = ({ user }) => {
       ]
     }, (place, status) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+        console.log("Place details received:", place); // 調試用
+        
         const newClickedPlace = {
           name: place.name || '未知店家',
           address: place.formatted_address || '地址不詳',
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
+          lat: place.geometry?.location?.lat() || 0,
+          lng: place.geometry?.location?.lng() || 0,
           googlePlaceId: place.place_id,
           rating: place.rating,
           userRatingsTotal: place.user_ratings_total,
@@ -167,16 +169,23 @@ const HomePage = ({ user }) => {
           phoneNumber: place.formatted_phone_number
         };
         
-        // 確保狀態按順序更新
-        setClickedPlace(newClickedPlace);
-        setShowPlaceInfo(true);
+        console.log("New clicked place:", newClickedPlace); // 調試用
         
-        // 使用 setTimeout 確保 clickedPlace 狀態更新完成後再設置 InfoWindow
-        setTimeout(() => {
-          setActiveInfoWindow(newClickedPlace.googlePlaceId);
-        }, 100);
-        
-        setFeedbackMessage('');
+        // 確保必要數據存在才設置狀態
+        if (newClickedPlace.name && newClickedPlace.lat && newClickedPlace.lng && newClickedPlace.googlePlaceId) {
+          setClickedPlace(newClickedPlace);
+          setShowPlaceInfo(true);
+          
+          // 延遲設置 InfoWindow 確保 clickedPlace 狀態已更新
+          setTimeout(() => {
+            setActiveInfoWindow(newClickedPlace.googlePlaceId);
+          }, 50);
+          
+          setFeedbackMessage('');
+        } else {
+          console.error("Missing required place data:", newClickedPlace);
+          setFeedbackMessage('店家資訊不完整，無法顯示詳細資訊');
+        }
       } else {
         console.error("Failed to get place details:", status, place);
         setClickedPlace(null);
@@ -477,15 +486,16 @@ const HomePage = ({ user }) => {
                selectedStation && 
                clickedPlace.name && 
                clickedPlace.lat && 
-               clickedPlace.lng && (
+               clickedPlace.lng && 
+               clickedPlace.googlePlaceId && (
                 <InfoWindow 
-                  key={`${clickedPlace.googlePlaceId}-${Date.now()}`} // 添加時間戳確保重新渲染
-                  position={{ lat: clickedPlace.lat, lng: clickedPlace.lng }} 
+                  key={`${clickedPlace.googlePlaceId}-${activeInfoWindow}`}
+                  position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }} 
                   onCloseClick={handleClosePlaceInfo}
                 >
                   <div className="place-infowindow">
                     <h4>{clickedPlace.name}</h4>
-                    <p>{clickedPlace.address?.substring(0, 25)}...</p>
+                    <p>{clickedPlace.address ? (clickedPlace.address.substring(0, 25) + '...') : '地址不詳'}</p>
                     {clickedPlace.rating !== undefined && (
                       <p>評分: {clickedPlace.rating} / 5</p>
                     )}
