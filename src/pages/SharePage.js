@@ -26,6 +26,7 @@ const SharePage = () => {
   // const [mapInstance, setMapInstance] = useState(null); // mapRef.current 即可
   const [activeInfoWindow, setActiveInfoWindow] = useState(null); // googlePlaceId of active InfoWindow
   const [clickedStoreForInfo, setClickedStoreForInfo] = useState(null); // Store object for InfoWindow
+  const [showPlaceInfo, setShowPlaceInfo] = useState(false); // 控制側邊欄詳細資訊的顯示
 
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY; // 雖然 LoadScript 在 App.js, 但檢查還是好的
 
@@ -72,10 +73,62 @@ const SharePage = () => {
   }, [shareId]);
 
   const handleMarkerClick = (store) => {
-    setClickedStoreForInfo(store);
-    setActiveInfoWindow(store.googlePlaceId);
+    // 先清除舊的狀態
+    setActiveInfoWindow(null);
+
+    // 立即用收藏的店家資料設置 clickedStoreForInfo
+    setClickedStoreForInfo({ ...store });
+    setShowPlaceInfo(true);
+
     if (mapRef.current && store.lat && store.lng) {
       mapRef.current.panTo({ lat: store.lat, lng: store.lng });
+    }
+
+    // 獲取並更新即時店家資訊
+    if (mapRef.current && window.google && window.google.maps && window.google.maps.places) {
+      const placesService = new window.google.maps.places.PlacesService(mapRef.current);
+      placesService.getDetails({
+        placeId: store.googlePlaceId,
+        fields: [
+          'name', 'formatted_address', 'geometry.location', 'place_id',
+          'rating', 'user_ratings_total', 'photos', 'opening_hours',
+          'types', 'website', 'formatted_phone_number'
+        ]
+      }, (place, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+          const updatedStoreDetails = {
+            ...store, // 保留原收藏的資料
+            name: place.name || store.name,
+            address: place.formatted_address || store.address,
+            lat: place.geometry?.location?.lat() || store.lat,
+            lng: place.geometry?.location?.lng() || store.lng,
+            rating: place.rating,
+            userRatingsTotal: place.user_ratings_total,
+            photos: place.photos ? place.photos.map(p => ({ 
+              getUrl: (options) => p.getUrl(options), 
+              photo_reference: p.photo_reference 
+            })) : (store.photos || []),
+            openingHours: place.opening_hours,
+            types: place.types,
+            website: place.website,
+            phoneNumber: place.formatted_phone_number,
+          };
+          setClickedStoreForInfo(updatedStoreDetails);
+          setTimeout(() => {
+            setActiveInfoWindow(store.googlePlaceId);
+          }, 50);
+        } else {
+          console.error(`無法獲取分享店家 ${store.name} 的即時詳細資訊: ${status}`);
+          setClickedStoreForInfo({ ...store });
+          setTimeout(() => {
+            setActiveInfoWindow(store.googlePlaceId);
+          }, 50);
+        }
+      });
+    } else {
+      setTimeout(() => {
+        setActiveInfoWindow(store.googlePlaceId);
+      }, 100);
     }
   };
   
@@ -85,7 +138,12 @@ const SharePage = () => {
 
   const handleCloseInfoWindow = () => {
     setActiveInfoWindow(null);
-    setClickedStoreForInfo(null);
+    // setShowPlaceInfo(false); // 根據需求決定是否同時關閉側邊
+  };
+
+  const handleClosePlaceInfo = () => {
+    setActiveInfoWindow(null);
+    setShowPlaceInfo(false);
   };
 
   // 頁面渲染邏輯
@@ -106,11 +164,74 @@ const SharePage = () => {
                     (stores && stores.length > 0 ? { lat: stores[0].lat, lng: stores[0].lng } : 
                     { lat: 22.639065, lng: 120.302104 }); // 高雄市中心備用
   const mapOptions = { 
-    clickableIcons: false, // 在分享頁面，不允許點擊地圖上的原生 POI
+    clickableIcons: true, // 啟用 POI 點擊功能
     disableDefaultUI: false, // 可以保留預設 UI (縮放、地圖類型等)
   };
   const siteName = process.env.REACT_APP_SITE_NAME || "高雄捷運美食地圖";
 
+  // POI 點擊處理 - 與 HomePage 類似的邏輯
+  const handleMapPoiClick = (event) => {
+    const placeId = event.placeId;
+    if (!placeId || !mapRef.current) {
+      console.warn("Place ID or Map instance is not available for POI click in share page.");
+      return;
+    }
+
+    // 先清除舊的狀態
+    setActiveInfoWindow(null);
+    setClickedStoreForInfo(null);
+    setShowPlaceInfo(false);
+
+    const placesService = new window.google.maps.places.PlacesService(mapRef.current);
+    placesService.getDetails({
+      placeId: placeId,
+      fields: [
+        'name', 'formatted_address', 'geometry.location', 'place_id',
+        'rating', 'user_ratings_total', 'photos', 'opening_hours',
+        'types', 'website', 'formatted_phone_number'
+      ]
+    }, (place, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+        console.log("Place details received in share page:", place);
+        
+        const newClickedPlace = {
+          name: place.name || '未知店家',
+          address: place.formatted_address || '地址不詳',
+          lat: place.geometry?.location?.lat() || 0,
+          lng: place.geometry?.location?.lng() || 0,
+          googlePlaceId: place.place_id,
+          rating: place.rating,
+          userRatingsTotal: place.user_ratings_total,
+          photos: place.photos ? place.photos.map(p => ({ 
+            getUrl: (options) => p.getUrl(options), 
+            photo_reference: p.photo_reference 
+          })) : [],
+          openingHours: place.opening_hours,
+          types: place.types,
+          website: place.website,
+          phoneNumber: place.formatted_phone_number
+        };
+        
+        // 確保必要數據存在才設置狀態
+        if (newClickedPlace.name && newClickedPlace.lat && newClickedPlace.lng && newClickedPlace.googlePlaceId) {
+          setClickedStoreForInfo(newClickedPlace);
+          setShowPlaceInfo(true);
+          
+          // 延遲設置 InfoWindow 確保 clickedStoreForInfo 狀態已更新
+          setTimeout(() => {
+            setActiveInfoWindow(newClickedPlace.googlePlaceId);
+          }, 50);
+        } else {
+          console.error("Missing required place data in share page:", newClickedPlace);
+        }
+      } else {
+        console.error("Failed to get place details in share page:", status, place);
+        setClickedStoreForInfo(null);
+        setShowPlaceInfo(false);
+        setActiveInfoWindow(null);
+      }
+    });
+  };
 
   return (
     <div className="share-page-container">
@@ -142,6 +263,57 @@ const SharePage = () => {
           ) : (
             <p>這個分享列表目前沒有店家。</p>
           )}
+          <hr />
+
+          {/* 店家詳細資訊 (側邊欄，與 HomePage 相同) */}
+          {clickedStoreForInfo && showPlaceInfo && (
+            <div className="place-details-sidebar">
+              <h3>{clickedStoreForInfo.name}</h3>
+              {clickedStoreForInfo.photos && clickedStoreForInfo.photos.length > 0 && (
+                <img 
+                  src={clickedStoreForInfo.photos[0].getUrl({ maxWidth: 300, maxHeight: 200 })} 
+                  alt={`${clickedStoreForInfo.name} 的照片`} 
+                  style={{ width: '100%', height: 'auto', marginTop: '10px', borderRadius: '4px', marginBottom: '10px' }} 
+                />
+              )}
+              <p>地址: {clickedStoreForInfo.address}</p>
+              {clickedStoreForInfo.rating !== undefined && (
+                <p>評分: {clickedStoreForInfo.rating} ({clickedStoreForInfo.userRatingsTotal || 0} 則評論)</p>
+              )}
+              {/* 即時營業狀態 */}
+              {clickedStoreForInfo.openingHours && typeof clickedStoreForInfo.openingHours.open_now === 'boolean' && (
+                <div style={{ 
+                  fontSize: '0.9em', 
+                  marginTop: '10px', 
+                  marginBottom: (clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) ? '0px' : '5px', 
+                  color: clickedStoreForInfo.openingHours.open_now ? 'green' : 'red', 
+                  fontWeight: 'bold' 
+                }}>
+                  目前狀態: {clickedStoreForInfo.openingHours.open_now ? '營業中' : '休息中'}
+                </div>
+              )}
+              {/* 顯示營業時間 - 支援兩種格式：已保存的和即時獲取的 */}
+              {(clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) && (
+                <div style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                  <strong>詳細營業時間:</strong>
+                  <div style={{ paddingLeft: '15px', marginTop: '3px', marginBottom: '5px' }}>
+                    {(() => {
+                      const openingHoursSource = clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText;
+                      if (openingHoursSource && Array.isArray(openingHoursSource)) {
+                        return openingHoursSource.map((dailyHours, index) => (
+                          <div key={index} style={{ marginBottom: '1px' }}>{dailyHours}</div>
+                        ));
+                      }
+                      return <span style={{ marginBottom: '1px' }}>營業時間資訊不完整</span>;
+                    })()}
+                  </div>
+                </div>
+              )}
+              <button onClick={handleClosePlaceInfo} style={{ marginTop: '10px', marginLeft: '5px' }}>
+                關閉資訊
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* 右側顯示 Google 地圖 */}
@@ -154,9 +326,17 @@ const SharePage = () => {
               zoom={defaultZoom}
               onLoad={onLoad}
               onUnmount={onUnmount}
+              onClick={handleMapPoiClick}
               options={mapOptions}
-              // onClick={() => setActiveInfoWindow(null)} // 點擊地圖空白處關閉 InfoWindow
             >
+              {/* 標記捷運站位置 */}
+              {stationInfo && stationInfo.realCoords && (
+                <Marker
+                  position={stationInfo.realCoords}
+                  title={stationInfo.name}
+                />
+              )}
+
               {/* 標記分享列表中的店家 */}
               {stores && stores.map(store => (
                 <Marker
@@ -169,23 +349,96 @@ const SharePage = () => {
               ))}
 
               {/* InfoWindow 顯示店家資訊 */}
-              {clickedStoreForInfo && activeInfoWindow === clickedStoreForInfo.googlePlaceId && (
+              {clickedStoreForInfo && 
+               activeInfoWindow === clickedStoreForInfo.googlePlaceId && 
+               clickedStoreForInfo.name && 
+               clickedStoreForInfo.lat && 
+               clickedStoreForInfo.lng && 
+               clickedStoreForInfo.googlePlaceId && (
                 <InfoWindow
-                  key={clickedStoreForInfo.googlePlaceId} // 確保 InfoWindow 在切換店家時刷新
-                  position={{ lat: clickedStoreForInfo.lat, lng: clickedStoreForInfo.lng }}
+                  key={`${clickedStoreForInfo.googlePlaceId}-${activeInfoWindow}`}
+                  position={{ lat: Number(clickedStoreForInfo.lat), lng: Number(clickedStoreForInfo.lng) }}
                   onCloseClick={handleCloseInfoWindow}
                 >
                   <div className="place-infowindow-share">
                     <h4>{clickedStoreForInfo.name}</h4>
-                    <p>{clickedStoreForInfo.address}</p>
-                    {clickedStoreForInfo.rating !== undefined && <p>評分: {clickedStoreForInfo.rating} / 5</p>}
+                    {clickedStoreForInfo.photos && clickedStoreForInfo.photos.length > 0 && (
+                      <img 
+                        src={clickedStoreForInfo.photos[0].getUrl({ maxWidth: 150, maxHeight: 100 })} 
+                        alt={`${clickedStoreForInfo.name} 的照片`}
+                        style={{ maxWidth: '100%', height: 'auto', marginTop: '5px', marginBottom: '5px', borderRadius: '3px' }}
+                      />
+                    )}
+                    <p>{clickedStoreForInfo.address ? (clickedStoreForInfo.address.length > 25 ? clickedStoreForInfo.address.substring(0, 25) + '...' : clickedStoreForInfo.address) : '地址不詳'}</p>
+                    {clickedStoreForInfo.rating !== undefined && (
+                      <p>評分: {clickedStoreForInfo.rating} / 5</p>
+                    )}
+                    {/* 即時營業狀態 */}
+                    {clickedStoreForInfo.openingHours && typeof clickedStoreForInfo.openingHours.open_now === 'boolean' && (
+                      <div style={{ 
+                        fontSize: '0.9em', 
+                        marginTop: '5px', 
+                        marginBottom: (clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) ? '2px' : '5px',
+                        color: clickedStoreForInfo.openingHours.open_now ? 'green' : 'red', 
+                        fontWeight: 'bold' 
+                      }}>
+                        {clickedStoreForInfo.openingHours.open_now ? '目前營業中' : '目前休息中'}
+                      </div>
+                    )}
+                    {/* 顯示今日營業時間 */}
+                    {(clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) && (
+                      <div style={{ fontSize: '0.8em', marginTop: '5px' }}>
+                        <strong>今日時段:</strong>
+                        <span style={{ marginLeft: '5px' }}>
+                          {(() => {
+                            const openingHoursSource = clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText;
+                            if (openingHoursSource && Array.isArray(openingHoursSource)) {
+                              const today = new Date().getDay();
+                              const todayIndex = (today === 0) ? 6 : today - 1;
+                              
+                              let todayText = '';
+                              if (clickedStoreForInfo.openingHours && clickedStoreForInfo.openingHours.periods) {
+                                const now = new Date();
+                                const currentDayPeriods = clickedStoreForInfo.openingHours.periods.filter(p => p.open && p.open.day === today);
+                                if (currentDayPeriods.length > 0) {
+                                   todayText = currentDayPeriods.map(p => {
+                                    const openTime = `${String(p.open.hours).padStart(2, '0')}:${String(p.open.minutes).padStart(2, '0')}`;
+                                    if (p.close) {
+                                      const closeTime = `${String(p.close.hours).padStart(2, '0')}:${String(p.close.minutes).padStart(2, '0')}`;
+                                      return `${openTime} – ${closeTime}`;
+                                    }
+                                    return `${openTime} – (營業中)`;
+                                  }).join(', ');
+                                } else if (clickedStoreForInfo.openingHours.open_now === false && openingHoursSource[todayIndex] && (openingHoursSource[todayIndex].includes("休息") || openingHoursSource[todayIndex].includes("Closed"))) {
+                                    todayText = "休息";
+                                } else if (openingHoursSource[todayIndex]) {
+                                    todayText = openingHoursSource[todayIndex].substring(openingHoursSource[todayIndex].indexOf(':') + 1).trim();
+                                } else {
+                                    todayText = "資訊不詳";
+                                }
+
+                              } else if (openingHoursSource[todayIndex]) {
+                                todayText = openingHoursSource[todayIndex];
+                                const timePart = todayText.substring(todayText.indexOf(':') + 1).trim();
+                                return timePart || (todayText.includes("休息") || todayText.includes("Closed") ? "休息" : "資訊不詳");
+                              } else {
+                                return '資訊不完整';
+                              }
+                              return todayText || "資訊不詳";
+                            }
+                            return '資訊不完整';
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                    <br/>
                     {/* "在 Google 地圖上查看" 連結 */}
                     {clickedStoreForInfo.googlePlaceId && (
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedStoreForInfo.name || '')}&query_place_id=${clickedStoreForInfo.googlePlaceId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="google-maps-link-share"
+                        style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
                       >
                         在 Google 地圖上查看
                       </a>
