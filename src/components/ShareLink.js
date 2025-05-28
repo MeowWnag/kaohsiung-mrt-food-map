@@ -115,14 +115,29 @@ const ShareLink = ({
   };
 
   return (
-    <button
-      onClick={handleCreateFullMapShareLink}
-      disabled={isCreatingShareLink}
-      className="share-list-button"
-      title="分享我的所有捷運站收藏"
-    >
-      {isCreatingShareLink ? "生成中..." : "分享我的地圖"}
-    </button>
+    <div className="share-buttons">
+      {/* 單站分享按鈕 - 只有選擇了站點且有收藏時才顯示 */}
+      {selectedStation && myFavoriteStores.length > 0 && (
+        <button
+          onClick={handleCreateSingleStationShareLink}
+          disabled={isCreatingShareLink}
+          className="share-list-button"
+          title={`分享 ${selectedStation.name} 的收藏店家`}
+        >
+          {isCreatingShareLink ? "生成中..." : `分享 ${selectedStation.name}`}
+        </button>
+      )}
+      
+      {/* 全站收藏分享按鈕 */}
+      <button
+        onClick={handleCreateFullMapShareLink}
+        disabled={isCreatingShareLink}
+        className="share-list-button"
+        title="分享我的所有捷運站收藏"
+      >
+        {isCreatingShareLink ? "生成中..." : "分享我的地圖"}
+      </button>
+    </div>
   );
 };
 
