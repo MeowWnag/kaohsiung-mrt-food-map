@@ -25,6 +25,7 @@ const HomePage = ({ user }) => {
   const [clickedPlace, setClickedPlace] = useState(null);
   const [showPlaceInfo, setShowPlaceInfo] = useState(false);
   const [mapInstance, setMapInstance] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false); // 新增地圖載入狀態
   const [isAddingToList, setIsAddingToList] = useState(false);
   const [isRemovingFromList, setIsRemovingFromList] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -35,15 +36,21 @@ const HomePage = ({ user }) => {
 
   const mapRef = useRef(null);
 
+  // 修改 onLoad 函數以確保地圖完全載入
   const onLoad = useCallback(function callback(map) {
     setMapInstance(map);
     mapRef.current = map;
     console.log("Google Map instance loaded.");
+    // 等待地圖完全載入後再設置狀態
+    setTimeout(() => {
+      setMapLoaded(true);
+    }, 500); // 給予足夠時間讓地圖和 bounds 完全載入
   }, []);
 
   const onUnmount = useCallback(function callback(map) {
     mapRef.current = null;
     setMapInstance(null);
+    setMapLoaded(false); // 重置載入狀態
   }, []);
 
   useEffect(() => {
@@ -91,6 +98,7 @@ const HomePage = ({ user }) => {
       setActiveInfoWindow(null);
       setFeedbackMessage('');
       setGeneratedShareLink('');
+      setMapLoaded(false); // 重置載入狀態，等待新的地圖載入
     } else {
       console.warn(`站點 ${station.name} 缺少 realCoords 資料。`);
     }
@@ -467,54 +475,98 @@ const HomePage = ({ user }) => {
               onClick={handleMapPoiClick}
               options={mapOptions}
             >
-              {selectedStation && (
-                <Marker 
-                  position={selectedStation.realCoords} 
-                  title={selectedStation.name}
-                  icon={{
-                    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-                      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
-                          </filter>
-                        </defs>
-                        <circle cx="20" cy="20" r="16" fill="#1E40AF" stroke="white" stroke-width="4" filter="url(#shadow)"/>
-                        <circle cx="20" cy="20" r="6" fill="white"/>
-                        <text x="20" y="46" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1E40AF" text-anchor="middle">捷運站</text>
-                      </svg>
-                    `),
-                    scaledSize: new window.google.maps.Size(40, 50),
-                    anchor: new window.google.maps.Point(20, 25)
-                  }}
-                />
+              {/* 只在地圖完全載入後才渲染標記 */}
+              {mapLoaded && (
+                <>
+                  {/* 捷運站標記 */}
+                  {selectedStation && (
+                    <Marker 
+                      position={selectedStation.realCoords} 
+                      title={selectedStation.name}
+                      icon={{
+                        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+                          <svg width="48" height="60" viewBox="0 0 48 60" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                              <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+                                <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
+                              </filter>
+                              <linearGradient id="stationGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+                              </linearGradient>
+                              <linearGradient id="innerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#F3F4F6;stop-opacity:1" />
+                              </linearGradient>
+                            </defs>
+                            
+                            <!-- 外圈陰影 -->
+                            <circle cx="24" cy="24" r="20" fill="url(#stationGradient)" stroke="#FFFFFF" stroke-width="3" filter="url(#shadow)"/>
+                            
+                            <!-- 內圈 -->
+                            <circle cx="24" cy="24" r="12" fill="url(#innerGradient)" stroke="#1E40AF" stroke-width="1"/>
+                            
+                            <!-- 捷運圖示 -->
+                            <g transform="translate(24, 24)">
+                              <!-- 車廂 -->
+                              <rect x="-8" y="-4" width="16" height="8" rx="2" fill="#1E40AF"/>
+                              <!-- 車輪 -->
+                              <circle cx="-5" cy="3" r="1.5" fill="#6B7280"/>
+                              <circle cx="5" cy="3" r="1.5" fill="#6B7280"/>
+                              <!-- 車窗 -->
+                              <rect x="-6" y="-2" width="4" height="2" rx="0.5" fill="#FFFFFF"/>
+                              <rect x="2" y="-2" width="4" height="2" rx="0.5" fill="#FFFFFF"/>
+                            </g>
+                            
+                            <!-- 站名標籤 -->
+                            <rect x="4" y="46" width="40" height="12" rx="6" fill="#1E40AF" filter="url(#shadow)"/>
+                            <text x="24" y="54" font-family="Arial, Microsoft JhengHei, sans-serif" font-size="8" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
+                              ${selectedStation.name.length > 6 ? selectedStation.name.substring(0, 5) + '...' : selectedStation.name}
+                            </text>
+                          </svg>
+                        `),
+                        scaledSize: new window.google.maps.Size(48, 60),
+                        anchor: new window.google.maps.Point(24, 30)
+                      }}
+                    />
+                  )}
+                  
+                  {/* 收藏店家標記 */}
+                  {selectedStation && myFavoriteStores.map(store => (
+                    <Marker
+                      key={store.googlePlaceId}
+                      position={{ lat: store.lat, lng: store.lng }}
+                      title={store.name}
+                      icon={{
+                        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+                          <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+                              </filter>
+                            </defs>
+                            <circle cx="18" cy="18" r="14" fill="#DC2626" stroke="white" stroke-width="3" filter="url(#shadow)"/>
+                            <path d="M18 10l3 6h6l-5 4 2 6-6-3-6 3 2-6-5-4h6z" fill="white"/>
+                          </svg>
+                        `),
+                        scaledSize: new window.google.maps.Size(36, 36),
+                        anchor: new window.google.maps.Point(18, 18)
+                      }}
+                      onClick={() => handleFavoriteStoreMarkerClick(store)}
+                    />
+                  ))}
+                </>
               )}
               
-              {selectedStation && myFavoriteStores.map(store => (
-                <Marker
-                  key={store.googlePlaceId}
-                  position={{ lat: store.lat, lng: store.lng }}
-                  title={store.name}
-                  icon={{
-                    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-                      <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
-                          </filter>
-                        </defs>
-                        <circle cx="18" cy="18" r="14" fill="#DC2626" stroke="white" stroke-width="3" filter="url(#shadow)"/>
-                        <path d="M18 10l3 6h6l-5 4 2 6-6-3-6 3 2-6-5-4h6z" fill="white"/>
-                      </svg>
-                    `),
-                    scaledSize: new window.google.maps.Size(36, 36),
-                    anchor: new window.google.maps.Point(18, 18)
-                  }}
-                  onClick={() => handleFavoriteStoreMarkerClick(store)}
-                />
-              ))}
-              
-              {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
+              {/* InfoWindow - 也只在地圖載入完成後顯示 */}
+              {mapLoaded && 
+               clickedPlace && 
+               activeInfoWindow === clickedPlace.googlePlaceId && 
+               selectedStation && 
+               clickedPlace.name && 
+               clickedPlace.lat && 
+               clickedPlace.lng && 
+               clickedPlace.googlePlaceId && (
                 <InfoWindow
                   key={`${clickedPlace.googlePlaceId}-${activeInfoWindow}`}
                   position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }}
@@ -613,6 +665,16 @@ const HomePage = ({ user }) => {
                     </div>
                   </div>
                 </InfoWindow>
+              )}
+
+              {/* 地圖載入指示器 */}
+              {!mapLoaded && (
+                <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600">地圖載入中...</p>
+                  </div>
+                </div>
               )}
             </GoogleMap>
           )}
