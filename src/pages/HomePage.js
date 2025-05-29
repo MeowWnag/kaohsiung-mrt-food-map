@@ -303,7 +303,7 @@ const HomePage = ({ user }) => {
                   />
                   <button
                     onClick={handleLogout}
-                    className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                    className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                   >
                     <LogOut className="w-4 h-4 mr-2" />
                     登出
