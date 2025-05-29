@@ -279,7 +279,21 @@ const HomePage = ({ user }) => {
                 </button>
               )}
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-orange-500 rounded-full flex items-center justify-center">
+                {user?.photoURL ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt="使用者照片"
+                    className="w-8 h-8 rounded-full object-cover border-2 border-blue-500"
+                    onError={(e) => {
+                      // 如果照片載入失敗，回到預設圖示
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div 
+                  className={`w-8 h-8 bg-gradient-to-r from-blue-500 to-orange-500 rounded-full flex items-center justify-center ${user?.photoURL ? 'hidden' : ''}`}
+                >
                   <Navigation className="w-4 h-4 text-white" />
                 </div>
                 <h1 className="text-lg font-semibold text-gray-900">
