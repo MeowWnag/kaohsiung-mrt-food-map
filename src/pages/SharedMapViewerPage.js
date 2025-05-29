@@ -27,12 +27,45 @@ const SharedMapViewerPage = () => {
   const [showPlaceInfo, setShowPlaceInfo] = useState(false);
   const [activeInfoWindow, setActiveInfoWindow] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // 新增地圖載入狀態
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
   const mapRef = useRef(null);
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
-  const onLoad = useCallback(map => { mapRef.current = map; }, []);
-  const onUnmount = useCallback(map => { mapRef.current = null; }, []);
+  // 修改 onLoad 回調函數
+  const onLoad = useCallback(map => { 
+    mapRef.current = map;
+    setMapLoaded(true);
+    
+    // 等待一個短暫的延遲確保地圖完全載入
+    setTimeout(() => {
+      setGoogleMapsReady(true);
+    }, 100);
+  }, []);
+
+  const onUnmount = useCallback(map => { 
+    mapRef.current = null;
+    setMapLoaded(false);
+    setGoogleMapsReady(false);
+  }, []);
+
+  // 監聽 Google Maps API 載入狀態
+  useEffect(() => {
+    const checkGoogleMapsAPI = () => {
+      if (window.google && window.google.maps && window.google.maps.Marker) {
+        setGoogleMapsReady(true);
+      } else {
+        setTimeout(checkGoogleMapsAPI, 100);
+      }
+    };
+
+    if (mapViewActive) {
+      checkGoogleMapsAPI();
+    }
+  }, [mapViewActive]);
 
   useEffect(() => {
     if (!googleMapsApiKey && mapViewActive) {
@@ -233,40 +266,114 @@ const SharedMapViewerPage = () => {
 
   // 創建自定義站點標記圖標
   const createStationIcon = (station, isSelected = false) => {
+    if (!window.google?.maps?.Size) {
+      console.warn('Google Maps API not ready for createStationIcon');
+      return null;
+    }
+
     const lineColor = lineColors[station.lines[0]] || '#6B7280';
-    const size = isSelected ? 40 : 32;
+    const size = isSelected ? 60 : 48;
+    const stationName = station.name.length > 6 ? station.name.substring(0, 5) + '...' : station.name;
     
     return {
       url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+        <svg width="${size}" height="${size + 12}" viewBox="0 0 ${size} ${size + 12}" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.3)"/>
+            <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
             </filter>
+            <linearGradient id="stationGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:${lineColor};stop-opacity:1" />
+              <stop offset="100%" style="stop-color:${lineColor}DD;stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="innerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#F9FAFB;stop-opacity:1" />
+            </linearGradient>
+            ${isSelected ? `
+            <filter id="pulse">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge> 
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            ` : ''}
           </defs>
-          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" 
-                  fill="white" 
-                  stroke="${lineColor}" 
+          
+          <!-- 脈動效果（僅選中時） -->
+          ${isSelected ? `
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 4}" 
+                  fill="${lineColor}" 
+                  opacity="0.3" 
+                  filter="url(#pulse)">
+            <animate attributeName="r" values="${size/2 - 8};${size/2 - 4};${size/2 - 8}" 
+                     dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.5;0.1;0.5" 
+                     dur="2s" repeatCount="indefinite"/>
+          </circle>
+          ` : ''}
+          
+          <!-- 外圈 -->
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 6}" 
+                  fill="url(#stationGradient)" 
+                  stroke="#FFFFFF" 
                   stroke-width="3" 
                   filter="url(#shadow)"/>
-          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 8}" 
-                  fill="${lineColor}" 
-                  opacity="0.1"/>
-          <text x="${size/2}" y="${size/2 + 3}" 
-                text-anchor="middle" 
-                font-family="Arial, sans-serif" 
-                font-size="${size/3}" 
+          
+          <!-- 內圈 -->
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 12}" 
+                  fill="url(#innerGradient)" 
+                  stroke="${lineColor}" 
+                  stroke-width="1"/>
+          
+          <!-- 捷運圖示 -->
+          <g transform="translate(${size/2}, ${size/2})">
+            <!-- 車廂主體 -->
+            <rect x="-10" y="-5" width="20" height="10" rx="2" fill="${lineColor}"/>
+            <!-- 車輪 -->
+            <circle cx="-6" cy="4" r="2" fill="#6B7280"/>
+            <circle cx="6" cy="4" r="2" fill="#6B7280"/>
+            <!-- 車窗 -->
+            <rect x="-7" y="-3" width="5" height="3" rx="1" fill="#FFFFFF"/>
+            <rect x="2" y="-3" width="5" height="3" rx="1" fill="#FFFFFF"/>
+            <!-- 車門 -->
+            <line x1="0" y1="-5" x2="0" y2="5" stroke="#FFFFFF" stroke-width="1"/>
+            <!-- 站號 -->
+            <text x="0" y="2" font-family="Arial, Microsoft JhengHei, sans-serif" 
+                  font-size="6" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
+              ${station.id}
+            </text>
+          </g>
+          
+          <!-- 站名標籤 -->
+          <rect x="${size/2 - 20}" y="${size - 2}" width="40" height="12" rx="6" 
+                fill="${lineColor}" 
+                stroke="#FFFFFF" 
+                stroke-width="1"
+                filter="url(#shadow)"/>
+          <text x="${size/2}" y="${size + 4}" 
+                font-family="Arial, Microsoft JhengHei, sans-serif" 
+                font-size="8" 
                 font-weight="bold" 
-                fill="${lineColor}">${station.id}</text>
+                fill="#FFFFFF" 
+                text-anchor="middle">
+            ${stationName}
+          </text>
         </svg>
       `)}`,
-      scaledSize: new window.google.maps.Size(size, size),
+      scaledSize: new window.google.maps.Size(size, size + 12),
       anchor: new window.google.maps.Point(size/2, size/2)
     };
   };
 
   // 創建收藏店家標記圖標
   const createFavoriteStoreIcon = (isHovered = false) => {
+    if (!window.google?.maps?.Size) {
+      console.warn('Google Maps API not ready for createFavoriteStoreIcon');
+      return null;
+    }
+
     const size = isHovered ? 36 : 30;
     
     return {
@@ -307,6 +414,11 @@ const SharedMapViewerPage = () => {
 
   // 創建新發現地點標記圖標
   const createNewPlaceIcon = () => {
+    if (!window.google?.maps?.Size) {
+      console.warn('Google Maps API not ready for createNewPlaceIcon');
+      return null;
+    }
+
     const size = 32;
     
     return {
@@ -337,6 +449,11 @@ const SharedMapViewerPage = () => {
 
   // 創建脈動動畫標記
   const createPulsingIcon = (color = '#3B82F6') => {
+    if (!window.google?.maps?.Size) {
+      console.warn('Google Maps API not ready for createPulsingIcon');
+      return null;
+    }
+
     const size = 40;
     
     return {
@@ -764,55 +881,91 @@ const SharedMapViewerPage = () => {
                 ]
               }}
             >
-              {/* 選中的捷運站標記 */}
-              {selectedStation && (
-                <Marker 
-                  position={selectedStation.realCoords} 
-                  title={selectedStation.name}
-                  icon={createPulsingIcon(lineColors[selectedStation.lines[0]] || '#3B82F6')}
-                  zIndex={1000}
-                />
+              {/* 只在地圖和 Google Maps API 完全載入後才渲染標記 */}
+              {mapLoaded && googleMapsReady && (
+                <>
+                  {/* 選中的捷運站標記 */}
+                  {selectedStation && (
+                    <Marker 
+                      position={selectedStation.realCoords} 
+                      title={selectedStation.name}
+                      icon={createStationIcon(selectedStation, true)}
+                      zIndex={1000}
+                    />
+                  )}
+
+                  {/* 其他捷運站標記（可選，如果您想顯示附近的其他站點） */}
+                  {stationData
+                    .filter(station => 
+                      station.realCoords && 
+                      station.id !== selectedStation?.id &&
+                      // 只顯示距離選中站點一定範圍內的其他站點（可選）
+                      selectedStation && 
+                      Math.abs(station.realCoords.lat - selectedStation.realCoords.lat) < 0.02 &&
+                      Math.abs(station.realCoords.lng - selectedStation.realCoords.lng) < 0.02
+                    )
+                    .map(station => (
+                      <Marker
+                        key={`nearby-${station.id}`}
+                        position={station.realCoords}
+                        title={station.name}
+                        icon={createStationIcon(station, false)}
+                        onClick={() => handleStationClick(station)}
+                        zIndex={500}
+                      />
+                    ))}
+
+                  {/* 收藏店家標記 */}
+                  {displayedFavoriteStores.map((store, index) => (
+                    <Marker
+                      key={store.googlePlaceId}
+                      position={{ lat: store.lat, lng: store.lng }}
+                      title={store.name}
+                      icon={createFavoriteStoreIcon(clickedPlace?.googlePlaceId === store.googlePlaceId)}
+                      onClick={() => handleSharedStoreMarkerClick(store)}
+                      zIndex={clickedPlace?.googlePlaceId === store.googlePlaceId ? 999 : 100 + index}
+                      animation={clickedPlace?.googlePlaceId === store.googlePlaceId ? window.google.maps.Animation.BOUNCE : null}
+                    />
+                  ))}
+
+                  {/* 新發現地點的標記 */}
+                  {clickedPlace && 
+                   !displayedFavoriteStores.some(store => store.googlePlaceId === clickedPlace.googlePlaceId) && 
+                   selectedStation && (
+                    <Marker
+                      position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }}
+                      title={clickedPlace.name}
+                      icon={createNewPlaceIcon()}
+                      zIndex={998}
+                    />
+                  )}
+
+                  {/* InfoWindow */}
+                  {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
+                    <InfoWindow 
+                      key={`${clickedPlace.googlePlaceId}-${activeInfoWindow}`}
+                      position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }} 
+                      onCloseClick={handleClosePlaceInfo}
+                      options={{
+                        pixelOffset: new window.google.maps.Size(0, -10),
+                        maxWidth: 320,
+                        disableAutoPan: false
+                      }}
+                    >
+                      {renderInfoWindowContent()}
+                    </InfoWindow>
+                  )}
+                </>
               )}
 
-              {/* 收藏店家標記 */}
-              {displayedFavoriteStores.map((store, index) => (
-                <Marker
-                  key={store.googlePlaceId}
-                  position={{ lat: store.lat, lng: store.lng }}
-                  title={store.name}
-                  icon={createFavoriteStoreIcon(clickedPlace?.googlePlaceId === store.googlePlaceId)}
-                  onClick={() => handleSharedStoreMarkerClick(store)}
-                  zIndex={clickedPlace?.googlePlaceId === store.googlePlaceId ? 999 : 100 + index}
-                  animation={clickedPlace?.googlePlaceId === store.googlePlaceId ? window.google.maps.Animation.BOUNCE : null}
-                />
-              ))}
-
-              {/* 新發現地點的標記 */}
-              {clickedPlace && 
-               !displayedFavoriteStores.some(store => store.googlePlaceId === clickedPlace.googlePlaceId) && 
-               selectedStation && (
-                <Marker
-                  position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }}
-                  title={clickedPlace.name}
-                  icon={createNewPlaceIcon()}
-                  zIndex={998}
-                />
-              )}
-
-              {/* InfoWindow */}
-              {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
-                <InfoWindow 
-                  key={`${clickedPlace.googlePlaceId}-${activeInfoWindow}`}
-                  position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }} 
-                  onCloseClick={handleClosePlaceInfo}
-                  options={{
-                    pixelOffset: new window.google.maps.Size(0, -10),
-                    maxWidth: 320,
-                    disableAutoPan: false
-                  }}
-                >
-                  {renderInfoWindowContent()}
-                </InfoWindow>
+              {/* 載入指示器 */}
+              {(!mapLoaded || !googleMapsReady) && (
+                <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-600">載入地圖標記中...</p>
+                  </div>
+                </div>
               )}
             </GoogleMap>
           ) : (
