@@ -8,7 +8,6 @@ import { GoogleMap, Marker, InfoWindow } from '@react-google-maps/api';
 import StationList from '../components/StationList';
 import SharedFavoriteStores from '../components/SharedFavoriteStores';
 import PlaceDetails from '../components/PlaceDetails';
-import './HomePage.css';
 
 const mapContainerStyle = { width: '100%', height: '100%' };
 const defaultZoom = 16;
@@ -27,6 +26,7 @@ const SharedMapViewerPage = () => {
   const [clickedPlace, setClickedPlace] = useState(null);
   const [showPlaceInfo, setShowPlaceInfo] = useState(false);
   const [activeInfoWindow, setActiveInfoWindow] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const mapRef = useRef(null);
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -86,6 +86,7 @@ const SharedMapViewerPage = () => {
       setSelectedStation(station);
       setMapViewActive(true);
       handleClosePlaceInfo();
+      setSidebarOpen(false); // 關閉手機版側邊欄
     } else {
       console.warn(`(Shared View) 站點 ${station.name} 缺少 realCoords 資料。`);
     }
@@ -220,36 +221,153 @@ const SharedMapViewerPage = () => {
     handleSharedStoreMarkerClick(store);
   };
 
-  // 渲染路線圖上的站點標記
-  const renderStationMarkers = () => {
-    const { allStationsFavorites } = sharedFullMapData;
+  // 準備 StationList 的 props
+  const getStationListData = () => {
+    if (!sharedFullMapData?.allStationsFavorites) return stationData;
     
-    return stationData.map((station) => {
-      const stationLineColor = lineColors[station.lines[0]] || '#555';
-      const hasFavorites = allStationsFavorites && allStationsFavorites[station.id] && allStationsFavorites[station.id].length > 0;
-      
-      return (
-        <button
-          key={station.id}
-          className={`station-marker ${hoveredStation === station.id ? 'hovered' : ''} ${hasFavorites ? 'has-favorites-shared' : ''}`}
-          style={{
-            left: station.coords.x,
-            top: station.coords.y,
-            backgroundColor: hasFavorites ? '#FFEB3B' : '#FFFFFF',
-            borderColor: stationLineColor,
-          }}
-          onClick={() => handleStationClick(station)}
-          onMouseEnter={() => setHoveredStation(station.id)}
-          onMouseLeave={() => setHoveredStation(null)}
-          title={`${station.name}${hasFavorites ? ` (有${allStationsFavorites[station.id].length}筆分享收藏)` : ''}`}
-        >
-          <span className="station-id-tooltip">{station.id}</span>
-        </button>
-      );
-    });
+    return stationData.map(station => ({
+      ...station,
+      favoritesCount: sharedFullMapData.allStationsFavorites[station.id]?.length || 0
+    }));
   };
 
-  // 渲染 InfoWindow 內容
+  // 創建自定義站點標記圖標
+  const createStationIcon = (station, isSelected = false) => {
+    const lineColor = lineColors[station.lines[0]] || '#6B7280';
+    const size = isSelected ? 40 : 32;
+    
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.3)"/>
+            </filter>
+          </defs>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" 
+                  fill="white" 
+                  stroke="${lineColor}" 
+                  stroke-width="3" 
+                  filter="url(#shadow)"/>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 8}" 
+                  fill="${lineColor}" 
+                  opacity="0.1"/>
+          <text x="${size/2}" y="${size/2 + 3}" 
+                text-anchor="middle" 
+                font-family="Arial, sans-serif" 
+                font-size="${size/3}" 
+                font-weight="bold" 
+                fill="${lineColor}">${station.id}</text>
+        </svg>
+      `)}`,
+      scaledSize: new window.google.maps.Size(size, size),
+      anchor: new window.google.maps.Point(size/2, size/2)
+    };
+  };
+
+  // 創建收藏店家標記圖標
+  const createFavoriteStoreIcon = (isHovered = false) => {
+    const size = isHovered ? 36 : 30;
+    
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
+            </filter>
+            <linearGradient id="favoriteGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" 
+                  fill="url(#favoriteGradient)" 
+                  stroke="white" 
+                  stroke-width="2" 
+                  filter="url(#shadow)"/>
+          <path d="M${size/2} ${size/4 + 2} 
+                   L${size/2 + 3} ${size/2 - 1} 
+                   L${size/2 + 6} ${size/2 - 1} 
+                   L${size/2 + 2} ${size/2 + 2} 
+                   L${size/2 + 4} ${size*3/4 - 2} 
+                   L${size/2} ${size/2 + 4} 
+                   L${size/2 - 4} ${size*3/4 - 2} 
+                   L${size/2 - 2} ${size/2 + 2} 
+                   L${size/2 - 6} ${size/2 - 1} 
+                   L${size/2 - 3} ${size/2 - 1} Z" 
+                fill="white" 
+                stroke="none"/>
+        </svg>
+      `)}`,
+      scaledSize: new window.google.maps.Size(size, size),
+      anchor: new window.google.maps.Point(size/2, size/2)
+    };
+  };
+
+  // 創建新發現地點標記圖標
+  const createNewPlaceIcon = () => {
+    const size = 32;
+    
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
+            </filter>
+            <linearGradient id="newPlaceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" 
+                  fill="url(#newPlaceGradient)" 
+                  stroke="white" 
+                  stroke-width="2" 
+                  filter="url(#shadow)"/>
+          <circle cx="${size/2}" cy="${size/2}" r="4" 
+                  fill="white"/>
+        </svg>
+      `)}`,
+      scaledSize: new window.google.maps.Size(size, size),
+      anchor: new window.google.maps.Point(size/2, size/2)
+    };
+  };
+
+  // 創建脈動動畫標記
+  const createPulsingIcon = (color = '#3B82F6') => {
+    const size = 40;
+    
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
+            </filter>
+          </defs>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 4}" 
+                  fill="${color}" 
+                  opacity="0.3" 
+                  filter="url(#shadow)">
+            <animate attributeName="r" values="${size/2 - 8};${size/2 - 4};${size/2 - 8}" 
+                     dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.7;0.2;0.7" 
+                     dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="${size/2}" cy="${size/2}" r="${size/4}" 
+                  fill="${color}" 
+                  stroke="white" 
+                  stroke-width="2"/>
+        </svg>
+      `)}`,
+      scaledSize: new window.google.maps.Size(size, size),
+      anchor: new window.google.maps.Point(size/2, size/2)
+    };
+  };
+
+  // 優化的 InfoWindow 內容
   const renderInfoWindowContent = () => {
     if (!clickedPlace || activeInfoWindow !== clickedPlace.googlePlaceId || !selectedStation) {
       return null;
@@ -286,67 +404,197 @@ const SharedMapViewerPage = () => {
       return '資訊不詳';
     };
 
+    const isOpen = clickedPlace.openingHours?.open_now;
+    
     return (
-      <div className="place-infowindow">
-        <h4>{clickedPlace.name}</h4>
-        {clickedPlace.photos && clickedPlace.photos.length > 0 && (
-          <img 
-            src={clickedPlace.photos[0].getUrl({ maxWidth: 150, maxHeight: 100 })} 
-            alt={`${clickedPlace.name} 的照片`}
-            style={{ maxWidth: '100%', height: 'auto', marginTop: '5px', marginBottom: '5px', borderRadius: '3px' }}
-          />
-        )}
-        <p>{clickedPlace.address ? (clickedPlace.address.length > 25 ? clickedPlace.address.substring(0, 25) + '...' : clickedPlace.address) : '地址不詳'}</p>
-        {clickedPlace.rating !== undefined && (
-          <p>評分: {clickedPlace.rating} / 5</p>
-        )}
-        {clickedPlace.openingHours && typeof clickedPlace.openingHours.open_now === 'boolean' && (
-          <div style={{ 
-            fontSize: '0.9em', 
-            marginTop: '5px', 
-            marginBottom: '2px',
-            color: clickedPlace.openingHours.open_now ? 'green' : 'red', 
-            fontWeight: 'bold' 
-          }}>
-            {clickedPlace.openingHours.open_now ? '目前營業中' : '目前休息中'}
+      <div className="p-4 max-w-sm min-w-[280px]">
+        {/* 標題與照片 */}
+        <div className="mb-3">
+          <h4 className="font-bold text-lg text-gray-800 mb-2 flex items-center">
+            {clickedPlace.name}
+            <span className="ml-2 text-yellow-500">⭐</span>
+          </h4>
+          {clickedPlace.photos && clickedPlace.photos.length > 0 && (
+            <div className="relative overflow-hidden rounded-lg shadow-md mb-3">
+              <img 
+                src={clickedPlace.photos[0].getUrl({ maxWidth: 280, maxHeight: 160 })} 
+                alt={`${clickedPlace.name} 的照片`}
+                className="w-full h-32 object-cover transition-transform duration-300 hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+            </div>
+          )}
+        </div>
+
+        {/* 評分與地址 */}
+        <div className="space-y-2 mb-3">
+          {clickedPlace.rating !== undefined && (
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center bg-yellow-50 px-2 py-1 rounded-lg">
+                <span className="text-yellow-500 text-sm">★</span>
+                <span className="text-sm font-semibold text-gray-700 ml-1">
+                  {clickedPlace.rating}
+                </span>
+                {clickedPlace.userRatingsTotal && (
+                  <span className="text-xs text-gray-500 ml-1">
+                    ({clickedPlace.userRatingsTotal})
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <div className="flex items-start space-x-2">
+            <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm text-gray-600 flex-1">
+              {clickedPlace.address || '地址不詳'}
+            </p>
+          </div>
+        </div>
+
+        {/* 營業狀態 */}
+        {typeof isOpen === 'boolean' && (
+          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mb-3 ${
+            isOpen 
+              ? 'bg-green-100 text-green-700 border border-green-200' 
+              : 'bg-red-100 text-red-700 border border-red-200'
+          }`}>
+            <div className={`w-2 h-2 rounded-full mr-2 ${
+              isOpen ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            {isOpen ? '目前營業中' : '目前休息中'}
           </div>
         )}
+
+        {/* 營業時間 */}
         {(clickedPlace.openingHours?.weekday_text || clickedPlace.openingHoursText) && (
-          <div style={{ fontSize: '0.8em', marginTop: '5px' }}>
-            <strong>今日時段:</strong>
-            <span style={{ marginLeft: '5px' }}>
-              {getTodayHours()}
-            </span>
+          <div className="bg-gray-50 rounded-lg p-3 mb-3">
+            <div className="flex items-center space-x-2 text-sm">
+              <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+              <span className="font-medium text-gray-700">今日營業時間:</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1 ml-6">{getTodayHours()}</p>
           </div>
         )}
-        <br/>
-        {clickedPlace.googlePlaceId && (
-          <a 
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            style={{ display: 'inline-block', marginTop: '8px', fontSize: '0.9em', color: '#1a73e8' }}
-          >
-            在 Google 地圖上查看
-          </a>
-        )}
+
+        {/* 操作按鈕 */}
+        <div className="flex space-x-2">
+          {clickedPlace.googlePlaceId && (
+            <a 
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPlace.name || '')}&query_place_id=${clickedPlace.googlePlaceId}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200 text-center inline-flex items-center justify-center"
+            >
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+              </svg>
+              Google 地圖
+            </a>
+          )}
+          
+          {clickedPlace.website && (
+            <a 
+              href={clickedPlace.website} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2 px-3 rounded-lg transition-colors duration-200 inline-flex items-center justify-center"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clipRule="evenodd" />
+              </svg>
+            </a>
+          )}
+        </div>
       </div>
     );
   };
 
-  // 準備 StationList 的 props
-  const getStationListData = () => {
-    if (!sharedFullMapData?.allStationsFavorites) return stationData;
+  // 渲染路線圖上的站點標記
+  const renderStationMarkers = () => {
+    const { allStationsFavorites } = sharedFullMapData;
     
-    return stationData.map(station => ({
-      ...station,
-      favoritesCount: sharedFullMapData.allStationsFavorites[station.id]?.length || 0
-    }));
+    return stationData.map((station) => {
+      const stationLineColor = lineColors[station.lines[0]] || '#555';
+      const hasFavorites = allStationsFavorites && allStationsFavorites[station.id] && allStationsFavorites[station.id].length > 0;
+      
+      return (
+        <button
+          key={station.id}
+          className={`
+            absolute w-6 h-6 rounded-full border-2 bg-white 
+            flex items-center justify-center text-xs font-semibold
+            transition-all duration-200 ease-in-out
+            hover:scale-110 hover:shadow-lg hover:z-10
+            focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50
+            ${hoveredStation === station.id ? 'scale-110 shadow-lg z-10' : ''}
+            ${hasFavorites ? 'bg-yellow-300 border-yellow-500 shadow-md' : 'bg-white'}
+          `}
+          style={{
+            left: station.coords.x,
+            top: station.coords.y,
+            borderColor: stationLineColor,
+            borderWidth: '2px'
+          }}
+          onClick={() => handleStationClick(station)}
+          onMouseEnter={() => setHoveredStation(station.id)}
+          onMouseLeave={() => setHoveredStation(null)}
+          title={`${station.name}${hasFavorites ? ` (有${allStationsFavorites[station.id].length}筆分享收藏)` : ''}`}
+        >
+          <span className="text-xs font-bold text-gray-700">{station.id}</span>
+        </button>
+      );
+    });
   };
 
-  if (loading) return <div className="share-page-status">讀取分享地圖中...</div>;
-  if (error) return <div className="share-page-status error">{error} <Link to="/" className="share-page-link">返回首頁</Link></div>;
-  if (!sharedFullMapData) return <div className="share-page-status">無法載入分享地圖。 <Link to="/" className="share-page-link">返回首頁</Link></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-center text-gray-700 text-lg">讀取分享地圖中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-4 text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <p className="text-red-700 text-lg mb-4">{error}</p>
+          <Link 
+            to="/" 
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+          >
+            返回首頁
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sharedFullMapData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-4 text-center">
+          <div className="text-gray-400 text-6xl mb-4">📍</div>
+          <p className="text-gray-700 text-lg mb-4">無法載入分享地圖。</p>
+          <Link 
+            to="/" 
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+          >
+            返回首頁
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const { originalUserName } = sharedFullMapData;
   const siteName = process.env.REACT_APP_SITE_NAME || "高雄捷運美食地圖";
@@ -356,57 +604,141 @@ const SharedMapViewerPage = () => {
   const mapOptions = { clickableIcons: true, disableDefaultUI: false };
 
   return (
-    <div className="homepage-container">
-      <header className="homepage-header">
-        {mapViewActive && (
-          <button onClick={handleBackToRouteMap} className="back-button">
-            返回分享路線圖
-          </button>
-        )}
-        <h1>{originalUserName || '一位使用者'} 分享的高雄捷運美食地圖</h1>
-        <div>
-          <Link to="/" className="back-to-home-button" style={{textDecoration: 'none'}}>
-            {`返回${siteName}`}
-          </Link>
+    <div className="h-screen bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              {mapViewActive && (
+                <button 
+                  onClick={handleBackToRouteMap} 
+                  className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 backdrop-blur-sm border border-white/20"
+                >
+                  ← 返回路線圖
+                </button>
+              )}
+              <h1 className="text-xl md:text-2xl font-bold">
+                <span className="text-yellow-300">{originalUserName || '一位使用者'}</span> 分享的高雄捷運美食地圖
+              </h1>
+            </div>
+            <Link 
+              to="/" 
+              className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 backdrop-blur-sm border border-white/20"
+            >
+              返回{siteName}
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="main-content">
-        <aside className="sidebar">
-          <StationList 
-            stationData={getStationListData()}
-            selectedStation={selectedStation}
-            handleStationClick={handleStationClick}
-            isSharedView={true}
-          />
-          <hr />
+      {/* Main Content */}
+      <main className="flex-1 flex relative overflow-hidden">
+        {/* Mobile Sidebar Toggle */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="md:hidden fixed top-20 left-4 z-30 bg-white shadow-lg rounded-full p-3 hover:bg-gray-50 transition-colors duration-200"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
 
-          {selectedStation ? (
-            <SharedFavoriteStores 
-              selectedStation={selectedStation}
-              displayedFavoriteStores={displayedFavoriteStores}
-              handleSidebarFavoriteStoreClick={handleSidebarFavoriteStoreClick}
-            />
-          ) : mapViewActive ? (
-            <p>請從左側列表選擇一個捷運站來查看分享的收藏。</p>
-          ) : (
-            <p>點選捷運站以查看該站點分享的收藏店家。</p>
-          )}
-          <hr />
-          
-          {mapViewActive && clickedPlace && selectedStation && (
-            <PlaceDetails 
-              clickedPlace={clickedPlace}
-              handleClosePlaceInfo={handleClosePlaceInfo}
-            />
-          )}
+        {/* Sidebar */}
+        <aside className={`
+          bg-white border-r border-gray-200 shadow-lg
+          w-80 flex flex-col transition-transform duration-300 ease-in-out z-20
+          md:relative md:translate-x-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          fixed md:static h-full
+        `}>
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg text-gray-800">捷運站列表</h2>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Station List */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4">
+              <StationList 
+                stationData={getStationListData()}
+                selectedStation={selectedStation}
+                handleStationClick={handleStationClick}
+                isSharedView={true}
+              />
+            </div>
+
+            <hr className="border-gray-200 mx-4" />
+
+            {/* Favorite Stores Section */}
+            <div className="p-4">
+              {selectedStation ? (
+                <SharedFavoriteStores 
+                  selectedStation={selectedStation}
+                  displayedFavoriteStores={displayedFavoriteStores}
+                  handleSidebarFavoriteStoreClick={handleSidebarFavoriteStoreClick}
+                />
+              ) : mapViewActive ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-2">🚇</div>
+                  <p className="text-gray-600">請從左側列表選擇一個捷運站來查看分享的收藏。</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-blue-500 text-4xl mb-2">📍</div>
+                  <p className="text-gray-600">點選捷運站以查看該站點分享的收藏店家。</p>
+                </div>
+              )}
+            </div>
+
+            <hr className="border-gray-200 mx-4" />
+            
+            {/* Place Details */}
+            {mapViewActive && clickedPlace && selectedStation && (
+              <div className="p-4">
+                <PlaceDetails 
+                  clickedPlace={clickedPlace}
+                  handleClosePlaceInfo={handleClosePlaceInfo}
+                />
+              </div>
+            )}
+          </div>
         </aside>
 
-        <div className="map-area-container">
+        {/* Overlay for mobile */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Map Area */}
+        <div className="flex-1 relative bg-gray-100">
           {!mapViewActive ? (
-            <div className="krtc-map-container">
-              <img src="/img/krtc-map.png" alt="高雄捷運路線圖" className="krtc-map-image"/>
-              {renderStationMarkers()}
+            <div className="relative w-full h-full overflow-auto bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+              <div className="relative bg-white rounded-xl shadow-2xl p-4 m-4">
+                {/* 固定容器尺寸 */}
+                <div className="relative" style={{ width: '1100px', height: '1516px', maxWidth: '100%', maxHeight: '100%' }}>
+                  <img 
+                    src="/img/krtc-map.png" 
+                    alt="高雄捷運路線圖" 
+                    className="w-full h-full object-contain rounded-lg shadow-lg"
+                    style={{ width: '1100px', height: '1516px' }}
+                  />
+                  {renderStationMarkers()}
+                </div>
+              </div>
             </div>
           ) : googleMapsApiKey ? (
             <GoogleMap
@@ -416,34 +748,80 @@ const SharedMapViewerPage = () => {
               onLoad={onLoad}
               onUnmount={onUnmount}
               onClick={handleMapPoiClick}
-              options={mapOptions}
+              options={{
+                ...mapOptions,
+                styles: [
+                  {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                  },
+                  {
+                    featureType: "transit",
+                    elementType: "labels",
+                    stylers: [{ visibility: "simplified" }]
+                  }
+                ]
+              }}
             >
+              {/* 選中的捷運站標記 */}
               {selectedStation && (
-                <Marker position={selectedStation.realCoords} title={selectedStation.name} />
+                <Marker 
+                  position={selectedStation.realCoords} 
+                  title={selectedStation.name}
+                  icon={createPulsingIcon(lineColors[selectedStation.lines[0]] || '#3B82F6')}
+                  zIndex={1000}
+                />
               )}
 
-              {displayedFavoriteStores.map(store => (
+              {/* 收藏店家標記 */}
+              {displayedFavoriteStores.map((store, index) => (
                 <Marker
                   key={store.googlePlaceId}
                   position={{ lat: store.lat, lng: store.lng }}
                   title={store.name}
-                  icon={{ url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" }}
+                  icon={createFavoriteStoreIcon(clickedPlace?.googlePlaceId === store.googlePlaceId)}
                   onClick={() => handleSharedStoreMarkerClick(store)}
+                  zIndex={clickedPlace?.googlePlaceId === store.googlePlaceId ? 999 : 100 + index}
+                  animation={clickedPlace?.googlePlaceId === store.googlePlaceId ? window.google.maps.Animation.BOUNCE : null}
                 />
               ))}
 
+              {/* 新發現地點的標記 */}
+              {clickedPlace && 
+               !displayedFavoriteStores.some(store => store.googlePlaceId === clickedPlace.googlePlaceId) && 
+               selectedStation && (
+                <Marker
+                  position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }}
+                  title={clickedPlace.name}
+                  icon={createNewPlaceIcon()}
+                  zIndex={998}
+                />
+              )}
+
+              {/* InfoWindow */}
               {clickedPlace && activeInfoWindow === clickedPlace.googlePlaceId && selectedStation && (
                 <InfoWindow 
                   key={`${clickedPlace.googlePlaceId}-${activeInfoWindow}`}
                   position={{ lat: Number(clickedPlace.lat), lng: Number(clickedPlace.lng) }} 
                   onCloseClick={handleClosePlaceInfo}
+                  options={{
+                    pixelOffset: new window.google.maps.Size(0, -10),
+                    maxWidth: 320,
+                    disableAutoPan: false
+                  }}
                 >
                   {renderInfoWindowContent()}
                 </InfoWindow>
               )}
             </GoogleMap>
           ) : (
-            <div className="share-page-status error">無法載入地圖：Google Maps API 金鑰未設定。</div>
+            <div className="h-full flex items-center justify-center bg-red-50">
+              <div className="text-center p-8">
+                <div className="text-red-500 text-6xl mb-4">🗺️</div>
+                <p className="text-red-700 text-lg">無法載入地圖：Google Maps API 金鑰未設定。</p>
+              </div>
+            </div>
           )}
         </div>
       </main>
