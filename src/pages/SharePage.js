@@ -20,14 +20,26 @@ const SharePage = () => {
 
   // 地圖相關狀態
   const mapRef = useRef(null);
+  const [mapLoaded, setMapLoaded] = useState(false); // 新增地圖載入狀態
   const [activeInfoWindow, setActiveInfoWindow] = useState(null);
   const [clickedStoreForInfo, setClickedStoreForInfo] = useState(null);
   const [showPlaceInfo, setShowPlaceInfo] = useState(false);
 
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
-  const onLoad = useCallback(map => { mapRef.current = map; }, []);
-  const onUnmount = useCallback(map => { mapRef.current = null; }, []);
+  // 修改 onLoad 函數以確保地圖完全載入
+  const onLoad = useCallback(map => { 
+    mapRef.current = map; 
+    // 等待地圖完全載入後再設置狀態
+    setTimeout(() => {
+      setMapLoaded(true);
+    }, 500); // 給予足夠時間讓地圖和 bounds 完全載入
+  }, []);
+
+  const onUnmount = useCallback(map => { 
+    mapRef.current = null; 
+    setMapLoaded(false); // 重置載入狀態
+  }, []);
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -255,6 +267,67 @@ const SharePage = () => {
   };
   const siteName = process.env.REACT_APP_SITE_NAME || "高雄捷運美食地圖";
 
+  // 在 SharePage 組件中添加自定義標記圖標函數
+  const createCustomMarkerIcon = (index, isSelected = false, isStation = false) => {
+    if (isStation) {
+      return {
+        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+          <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+              </filter>
+            </defs>
+            <circle cx="24" cy="24" r="20" fill="#3B82F6" stroke="white" stroke-width="3" filter="url(#shadow)"/>
+            <text x="24" y="30" text-anchor="middle" fill="white" font-size="16" font-weight="bold">🚇</text>
+          </svg>
+        `),
+        scaledSize: new window.google.maps.Size(48, 48),
+        anchor: new window.google.maps.Point(24, 24),
+        labelOrigin: new window.google.maps.Point(24, -8)
+      };
+    }
+
+    const isHighlighted = isSelected;
+    const backgroundColor = isHighlighted ? '#EF4444' : '#F59E0B';
+    const borderColor = isHighlighted ? '#DC2626' : '#D97706';
+    const size = isHighlighted ? 44 : 36;
+    
+    return {
+      url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+        <svg width="${size}" height="${size + 8}" viewBox="0 0 ${size} ${size + 8}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.25)"/>
+            </filter>
+            <linearGradient id="markerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:${backgroundColor};stop-opacity:1" />
+              <stop offset="100%" style="stop-color:${borderColor};stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <path d="M${size/2} ${size + 6} L${size/2 + 6} ${size - 2} Q${size/2} ${size + 2} ${size/2 - 6} ${size - 2} Z" 
+                fill="${backgroundColor}" filter="url(#shadow)"/>
+          <circle cx="${size/2}" cy="${size/2 - 2}" r="${size/2 - 4}" 
+                  fill="url(#markerGradient)" 
+                  stroke="white" 
+                  stroke-width="2" 
+                  filter="url(#shadow)"/>
+          <text x="${size/2}" y="${size/2 + 2}" 
+                text-anchor="middle" 
+                fill="white" 
+                font-size="${isHighlighted ? '14' : '12'}" 
+                font-weight="bold" 
+                font-family="Inter, system-ui, sans-serif">
+            ${index}
+          </text>
+        </svg>
+      `),
+      scaledSize: new window.google.maps.Size(size, size + 8),
+      anchor: new window.google.maps.Point(size/2, size + 6),
+      labelOrigin: new window.google.maps.Point(size/2, -10)
+    };
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -473,7 +546,7 @@ const SharePage = () => {
                             className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
                           >
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 002-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
                             {clickedStoreForInfo.phoneNumber}
                           </a>
@@ -514,49 +587,40 @@ const SharePage = () => {
               onClick={handleMapPoiClick}
               options={mapOptions}
             >
-              {/* 標記捷運站位置 */}
-              {stationInfo && stationInfo.realCoords && (
-                <Marker
-                  position={stationInfo.realCoords}
-                  title={stationInfo.name}
-                  icon={{
-                    url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                    scaledSize: new window.google.maps.Size(40, 40),
-                    labelOrigin: new window.google.maps.Point(20, -5)
-                  }}
-                  label={{
-                    text: "🚇",
-                    fontSize: "16px",
-                    fontWeight: "bold"
-                  }}
-                />
+              {/* 只在地圖完全載入後才渲染標記 */}
+              {mapLoaded && (
+                <>
+                  {/* 標記捷運站位置 - 使用優化的圖標 */}
+                  {stationInfo && stationInfo.realCoords && (
+                    <Marker
+                      position={stationInfo.realCoords}
+                      title={`${stationInfo.name} 捷運站`}
+                      icon={createCustomMarkerIcon(0, false, true)}
+                      zIndex={1000}
+                    />
+                  )}
+
+                  {/* 標記分享列表中的店家 - 使用優化的圖標 */}
+                  {stores && stores.map((store, index) => {
+                    const isSelected = clickedStoreForInfo?.googlePlaceId === store.googlePlaceId;
+                    return (
+                      <Marker
+                        key={store.googlePlaceId}
+                        position={{ lat: store.lat, lng: store.lng }}
+                        title={store.name}
+                        icon={createCustomMarkerIcon(index + 1, isSelected, false)}
+                        onClick={() => handleMarkerClick(store)}
+                        animation={isSelected ? window.google.maps.Animation.BOUNCE : null}
+                        zIndex={isSelected ? 999 : 100}
+                      />
+                    );
+                  })}
+                </>
               )}
 
-              {/* 標記分享列表中的店家 */}
-              {stores && stores.map((store, index) => (
-                <Marker
-                  key={store.googlePlaceId}
-                  position={{ lat: store.lat, lng: store.lng }}
-                  title={store.name}
-                  icon={{
-                    url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
-                    scaledSize: new window.google.maps.Size(35, 35),
-                    labelOrigin: new window.google.maps.Point(17, -5)
-                  }}
-                  label={{
-                    text: (index + 1).toString(),
-                    color: "white",
-                    fontSize: "14px",
-                    fontWeight: "bold"
-                  }}
-                  onClick={() => handleMarkerClick(store)}
-                  animation={clickedStoreForInfo?.googlePlaceId === store.googlePlaceId ? 
-                    window.google.maps.Animation.BOUNCE : null}
-                />
-              ))}
-
-              {/* InfoWindow */}
-              {clickedStoreForInfo && 
+              {/* InfoWindow - 也只在地圖載入完成後顯示 */}
+              {mapLoaded && 
+               clickedStoreForInfo && 
                activeInfoWindow === clickedStoreForInfo.googlePlaceId && 
                clickedStoreForInfo.name && 
                clickedStoreForInfo.lat && 
@@ -566,124 +630,135 @@ const SharePage = () => {
                   key={`${clickedStoreForInfo.googlePlaceId}-${activeInfoWindow}`}
                   position={{ lat: Number(clickedStoreForInfo.lat), lng: Number(clickedStoreForInfo.lng) }}
                   onCloseClick={handleCloseInfoWindow}
+                  options={{
+                    pixelOffset: new window.google.maps.Size(0, -10),
+                    disableAutoPan: false,
+                    maxWidth: 320,
+                    zIndex: 1001
+                  }}
                 >
-                  <div className="max-w-xs">
-                    <h4 className="font-semibold text-gray-900 mb-2">{clickedStoreForInfo.name}</h4>
-                    
-                    {clickedStoreForInfo.photos && clickedStoreForInfo.photos.length > 0 && (
-                      <img 
-                        src={clickedStoreForInfo.photos[0].getUrl({ maxWidth: 150, maxHeight: 100 })} 
-                        alt={`${clickedStoreForInfo.name} 的照片`}
-                        className="w-full h-20 object-cover rounded mb-2"
-                      />
-                    )}
-                    
-                    <p className="text-sm text-gray-600 mb-2">
-                      {clickedStoreForInfo.address ? 
-                        (clickedStoreForInfo.address.length > 25 ? 
-                          clickedStoreForInfo.address.substring(0, 25) + '...' : 
-                          clickedStoreForInfo.address
-                        ) : '地址不詳'}
-                    </p>
-                    
-                    {clickedStoreForInfo.rating !== undefined && (
-                      <div className="flex items-center mb-2">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <svg
-                              key={i}
-                              className={`w-3 h-3 ${
-                                i < Math.floor(clickedStoreForInfo.rating) 
-                                  ? 'text-yellow-400' 
-                                  : 'text-gray-300'
-                              }`}
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
+                  <div className="max-w-xs bg-white rounded-lg shadow-lg overflow-hidden">
+                    {/* Header with gradient background */}
+                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3">
+                      <h4 className="font-bold text-white text-lg leading-tight truncate">
+                        {clickedStoreForInfo.name}
+                      </h4>
+                      {clickedStoreForInfo.rating !== undefined && (
+                        <div className="flex items-center mt-1 space-x-1">
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <svg
+                                key={i}
+                                className={`w-3 h-3 ${
+                                  i < Math.floor(clickedStoreForInfo.rating) 
+                                    ? 'text-yellow-300' 
+                                    : 'text-blue-200'
+                                }`}
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="text-sm font-medium text-white">
+                            {clickedStoreForInfo.rating}
+                          </span>
+                          <span className="text-xs text-blue-100">
+                            ({clickedStoreForInfo.userRatingsTotal || 0})
+                          </span>
                         </div>
-                        <span className="ml-1 text-sm text-gray-600">{clickedStoreForInfo.rating} / 5</span>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 space-y-3">
+                      {/* Photo */}
+                      {clickedStoreForInfo.photos && clickedStoreForInfo.photos.length > 0 && (
+                        <div className="relative overflow-hidden rounded-lg">
+                          <img 
+                            src={clickedStoreForInfo.photos[0].getUrl({ maxWidth: 280, maxHeight: 160 })} 
+                            alt={`${clickedStoreForInfo.name} 的照片`}
+                            className="w-full h-24 object-cover transition-transform hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+                        </div>
+                      )}
+                      
+                      {/* Address */}
+                      <div className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          {clickedStoreForInfo.address ? 
+                            (clickedStoreForInfo.address.length > 35 ? 
+                              clickedStoreForInfo.address.substring(0, 35) + '...' : 
+                              clickedStoreForInfo.address
+                            ) : '地址不詳'}
+                        </p>
                       </div>
-                    )}
-                    
-                    {/* 營業狀態 */}
-                    {clickedStoreForInfo.openingHours && typeof clickedStoreForInfo.openingHours.open_now === 'boolean' && (
-                      <div className="mb-2">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          clickedStoreForInfo.openingHours.open_now 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {clickedStoreForInfo.openingHours.open_now ? '目前營業中' : '目前休息中'}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* 今日營業時間 */}
-                    {(clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) && (
-                      <div className="mb-3">
-                        <div className="text-xs text-gray-600">
-                          <strong>今日時段:</strong>
-                          <span className="ml-1">
+                      
+                      {/* Operating Status */}
+                      {clickedStoreForInfo.openingHours && typeof clickedStoreForInfo.openingHours.open_now === 'boolean' && (
+                        <div className="flex items-center space-x-2">
+                          <div className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+                            clickedStoreForInfo.openingHours.open_now 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full mr-2 ${
+                              clickedStoreForInfo.openingHours.open_now ? 'bg-green-400' : 'bg-red-400'
+                            }`}></div>
+                            {clickedStoreForInfo.openingHours.open_now ? '營業中' : '休息中'}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Today's Hours */}
+                      {(clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText) && (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-xs font-medium text-gray-700">今日營業時間</span>
+                          </div>
+                          <div className="text-xs text-gray-600 font-mono">
                             {(() => {
                               const openingHoursSource = clickedStoreForInfo.openingHours?.weekday_text || clickedStoreForInfo.openingHoursText;
                               if (openingHoursSource && Array.isArray(openingHoursSource)) {
                                 const today = new Date().getDay();
                                 const todayIndex = (today === 0) ? 6 : today - 1;
                                 
-                                let todayText = '';
-                                if (clickedStoreForInfo.openingHours && clickedStoreForInfo.openingHours.periods) {
-                                  const now = new Date();
-                                  const currentDayPeriods = clickedStoreForInfo.openingHours.periods.filter(p => p.open && p.open.day === today);
-                                  if (currentDayPeriods.length > 0) {
-                                     todayText = currentDayPeriods.map(p => {
-                                      const openTime = `${String(p.open.hours).padStart(2, '0')}:${String(p.open.minutes).padStart(2, '0')}`;
-                                      if (p.close) {
-                                        const closeTime = `${String(p.close.hours).padStart(2, '0')}:${String(p.close.minutes).padStart(2, '0')}`;
-                                        return `${openTime} – ${closeTime}`;
-                                      }
-                                      return `${openTime} – (營業中)`;
-                                    }).join(', ');
-                                  } else if (clickedStoreForInfo.openingHours.open_now === false && openingHoursSource[todayIndex] && (openingHoursSource[todayIndex].includes("休息") || openingHoursSource[todayIndex].includes("Closed"))) {
-                                      todayText = "休息";
-                                  } else if (openingHoursSource[todayIndex]) {
-                                      todayText = openingHoursSource[todayIndex].substring(openingHoursSource[todayIndex].indexOf(':') + 1).trim();
-                                  } else {
-                                      todayText = "資訊不詳";
-                                  }
-
-                                } else if (openingHoursSource[todayIndex]) {
-                                  todayText = openingHoursSource[todayIndex];
+                                if (openingHoursSource[todayIndex]) {
+                                  const todayText = openingHoursSource[todayIndex];
                                   const timePart = todayText.substring(todayText.indexOf(':') + 1).trim();
-                                  return timePart || (todayText.includes("休息") || todayText.includes("Closed") ? "休息" : "資訊不詳");
-                                } else {
-                                  return '資訊不完整';
+                                  return timePart || (todayText.includes("休息") || todayText.includes("Closed") ? "今日休息" : "資訊不詳");
                                 }
-                                return todayText || "資訊不詳";
                               }
                               return '資訊不完整';
                             })()}
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Google Maps 連結 */}
-                    {clickedStoreForInfo.googlePlaceId && (
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="border-t border-gray-100 px-4 py-3 bg-gray-50">
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedStoreForInfo.name || '')}&query_place_id=${clickedStoreForInfo.googlePlaceId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        className="inline-flex items-center justify-center w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-colors"
                       >
-                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
                         在 Google 地圖上查看
                       </a>
-                    )}
+                    </div>
                   </div>
                 </InfoWindow>
               )}
@@ -694,6 +769,16 @@ const SharePage = () => {
                 <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                   無法載入地圖：Google Maps API 金鑰未設定
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 地圖載入指示器 */}
+          {googleMapsApiKey && !mapLoaded && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">地圖載入中...</p>
               </div>
             </div>
           )}
