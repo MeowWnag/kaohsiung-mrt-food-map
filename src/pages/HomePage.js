@@ -459,13 +459,19 @@ const HomePage = ({ user }) => {
                   title={selectedStation.name}
                   icon={{
                     url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-                      <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="16" cy="16" r="12" fill="#3B82F6" stroke="white" stroke-width="3"/>
-                        <circle cx="16" cy="16" r="4" fill="white"/>
+                      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+                          </filter>
+                        </defs>
+                        <circle cx="20" cy="20" r="16" fill="#1E40AF" stroke="white" stroke-width="4" filter="url(#shadow)"/>
+                        <circle cx="20" cy="20" r="6" fill="white"/>
+                        <text x="20" y="46" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1E40AF" text-anchor="middle">捷運站</text>
                       </svg>
                     `),
-                    scaledSize: new window.google.maps.Size(32, 32),
-                    anchor: new window.google.maps.Point(16, 16)
+                    scaledSize: new window.google.maps.Size(40, 50),
+                    anchor: new window.google.maps.Point(20, 25)
                   }}
                 />
               )}
@@ -477,13 +483,18 @@ const HomePage = ({ user }) => {
                   title={store.name}
                   icon={{
                     url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-                      <svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="14" cy="14" r="10" fill="#F59E0B" stroke="white" stroke-width="2"/>
-                        <path d="M14 8l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" fill="white"/>
+                      <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+                          </filter>
+                        </defs>
+                        <circle cx="18" cy="18" r="14" fill="#DC2626" stroke="white" stroke-width="3" filter="url(#shadow)"/>
+                        <path d="M18 10l3 6h6l-5 4 2 6-6-3-6 3 2-6-5-4h6z" fill="white"/>
                       </svg>
                     `),
-                    scaledSize: new window.google.maps.Size(28, 28),
-                    anchor: new window.google.maps.Point(14, 14)
+                    scaledSize: new window.google.maps.Size(36, 36),
+                    anchor: new window.google.maps.Point(18, 18)
                   }}
                   onClick={() => handleFavoriteStoreMarkerClick(store)}
                 />
